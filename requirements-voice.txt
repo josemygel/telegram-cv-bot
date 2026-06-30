@@ -1,0 +1,13 @@
+# Voice mode (STS) extras — install with: pip install -r requirements-voice.txt
+# STT (faster-whisper) + TTS (edge-tts) + a bundled ffmpeg. All have Python 3.14 wheels.
+faster-whisper>=1.2
+ctranslate2>=4.8
+av>=17
+edge-tts>=7.2
+imageio-ffmpeg>=0.5
+# GPU acceleration for faster-whisper on NVIDIA (use compute_type=float16 on Blackwell).
+# Omit these two for CPU-only inference:
+nvidia-cudnn-cu12
+nvidia-cublas-cu12
+# Optional local/offline TTS fallback (instead of edge-tts):
+# piper-tts>=1.2

@@ -1,0 +1,25 @@
+# systemd unit to run josembot 24/7 on a Linux VPS (your own, an Oracle Always Free VM, etc.).
+# Install:
+#   sudo cp deploy/josembot.service /etc/systemd/system/josembot.service
+#   (edit WorkingDirectory / User / ExecStart paths below to match your server)
+#   sudo systemctl daemon-reload && sudo systemctl enable --now josembot
+#   sudo systemctl status josembot     # check it's running
+#   journalctl -u josembot -f          # follow logs
+#
+# The app reads its .env from WorkingDirectory (python-dotenv), so put a filled .env there
+# with BOT_MODE=text, LLM_BACKEND=openai and your Groq OPENAI_* values (or Ollama).
+[Unit]
+Description=josembot — Telegram personal assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=josembot
+WorkingDirectory=/opt/telegram-voice-bot
+ExecStart=/usr/bin/python3 -m src.bot
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

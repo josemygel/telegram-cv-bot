@@ -1,0 +1,54 @@
+# EXAMPLE projects. Copy this file to `profile/projects.yaml` and replace with YOUR projects
+# (projects.yaml is git-ignored, so your data stays private). This single file feeds the
+# /proyectos buttons, the MCP servers AND the LLM grounding — one source of truth.
+#
+# FIELDS (per project):
+#   id            slug, unique, stable (used as the button id; never shown/translated)
+#   name          display name
+#   role          your role on it (e.g. CTO, Author, Researcher)
+#   status        private | public | research  (free text; shown as-is)
+#   order         sort order in the menu (lower first)
+#   url           public link or null
+#   stack         list of technologies
+#   scope         es/en — the "envergadura": scale, timeframe, your responsibility
+#   participation es/en — what YOU did exactly
+#   summary       es/en — 1-2 line description (shown when the project button is tapped)
+#   details       es/en — OPTIONAL long-form explanation (used when asked in depth)
+# Both es and en are required for scope/participation/summary; details is optional.
+projects:
+  - id: example-product
+    name: "Example Product"
+    role: "Lead / CTO"
+    status: public
+    order: 1
+    url: https://example.com
+    stack: [Python, RAG, embeddings, SQL, "Cloud"]
+    scope:
+      es: "Plataforma de ejemplo, 2022 – Presente. Tu rol y el alcance (equipo, usuarios, duración)."
+      en: "Example platform, 2022 – Present. Your role and its scale (team, users, timeframe)."
+    participation:
+      es: "Qué hiciste exactamente: lo que diseñaste, construiste o lideraste."
+      en: "What you did exactly: what you designed, built or led."
+    summary:
+      es: "Resumen en una o dos frases del proyecto."
+      en: "One or two line summary of the project."
+    details:
+      es: "(Opcional) Explicación detallada para cuando pregunten en profundidad por este proyecto."
+      en: "(Optional) Detailed explanation for when someone asks in depth about this project."
+
+  - id: example-research
+    name: "Example Research"
+    role: "Author (personal R&D)"
+    status: research
+    order: 2
+    url: null
+    stack: [PyTorch, "deep learning", "validation", Optuna]
+    scope:
+      es: "Proyecto personal de I+D. Tema y enfoque."
+      en: "Personal R&D project. Topic and focus."
+    participation:
+      es: "Todo el trabajo: modelado, validación, experimentación."
+      en: "All of it: modeling, validation, experimentation."
+    summary:
+      es: "Resumen del proyecto de investigación."
+      en: "Summary of the research project."

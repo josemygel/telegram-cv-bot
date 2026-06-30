@@ -1,0 +1,15 @@
+.env
+.env.*
+logs/
+voices/
+cv/*.pdf
+__pycache__/
+**/__pycache__/
+*.pyc
+.git/
+.github/
+tests/
+mcps/
+scripts/
+.venv/
+venv/
