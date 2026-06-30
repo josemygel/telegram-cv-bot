@@ -163,5 +163,11 @@ pytest -q          # CI runs this on every push
   `cv/*.pdf`) is git-ignored; the repo ships `*.example.*` templates.
 - The bot never logs the token; avoid verbose HTTP logging (Telegram URLs embed the token).
 
-## License
-MIT — see [LICENSE](LICENSE).
+## Author & License
+Created by **Jose Miguel Gómez Lozano** — an **original work**, not a fork or derivative of any
+other project.
+
+**Personal, non-commercial license** (source-available — intentionally *not* an OSI "open-source"
+license): you may **view, download and modify** it for your **own personal, non-commercial** use.
+**Redistribution and commercial use are NOT allowed** without the author's written permission.
+See [LICENSE](LICENSE). Third-party dependencies keep their own licenses.
