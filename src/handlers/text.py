@@ -3,6 +3,9 @@
 Bundles resilience for slow/uncertain local models in one place:
 - 👀 seen-receipt + typing indicator,
 - per-chat busy lock so message bursts don't fire parallel LLM calls,
+- per-user rate limit (cooldown) so a public bot can't be spammed into racking up
+  paid-backend costs or hammering the local STT/TTS/LLM,
+- input length cap so one message can't blow up the LLM context/cost,
 - BackendError -> clear localized message; empty reply -> honest fallback,
 - HTML-escaped, 4096-split output,
 - optional AUDIO reply: persistent /voz preference, or an explicit in-message request.
@@ -12,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import re
 import tempfile
+import time
 import unicodedata
 from pathlib import Path
 
@@ -24,6 +28,9 @@ from ..llm import BackendError
 from .util import mark_seen, typing_action
 
 _LANG_NAME = {"es": "Spanish", "en": "English"}
+
+MAX_MESSAGE_CHARS = 1500  # generous for a real question; blocks copy-pasted walls of text
+RATE_LIMIT_SECONDS = 3  # minimum gap between LLM calls per user, on a public bot
 
 # Pure greetings get a fixed, formatted reply (no LLM) so the welcome is consistent
 # and instant. A greeting WITH a question ("hola, cuéntame de X") still goes to the LLM.
@@ -77,8 +84,10 @@ def make_text_handler(deps):
     if voice_pref is None:
         voice_pref = set()
     contact = deps.get("contact") or {}
+    name = deps["name"]
     t = i18n.t
     busy: set[int] = set()
+    last_call: dict[int, float] = {}
 
     async def _send_voice(update, reply: str, lang: str) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -93,29 +102,38 @@ def make_text_handler(deps):
         if not lang_store.is_set(uid):
             lang_store.set(uid, resolve_lang(update.effective_user.language_code))
         lang = lang_store.get(uid)
+        text = update.message.text or ""
 
         await mark_seen(update.message)
-        if _is_greeting(update.message.text):
+        if _is_greeting(text):
             # Fixed, formatted welcome — no LLM, so it's instant and always consistent.
             await update.message.reply_text(
                 markdown_to_telegram_html(t("greeting", lang)), parse_mode=ParseMode.HTML
             )
             return
-        if _wants_contact(update.message.text):
+        if _wants_contact(text):
             # Show the contact buttons instead of an LLM text dump.
             await update.message.reply_text(
-                t("contact_title", lang), reply_markup=keyboards.contact_menu(t, lang, contact)
+                t("contact_title", lang, name=name), reply_markup=keyboards.contact_menu(t, lang, contact)
             )
+            return
+        if len(text) > MAX_MESSAGE_CHARS:
+            await update.message.reply_text(t("message_too_long", lang, max=MAX_MESSAGE_CHARS))
+            return
+        now = time.monotonic()
+        if now - last_call.get(uid, 0.0) < RATE_LIMIT_SECONDS:
+            await update.message.reply_text(t("rate_limited", lang))
             return
         if chat_id in busy:
             await update.message.reply_text(t("busy", lang))
             return
         busy.add(chat_id)
+        last_call[uid] = now
         try:
             async with typing_action(context.bot, chat_id):
                 try:
                     out = await asyncio.to_thread(
-                        pipeline.process_text, chat_id, update.message.text, _LANG_NAME.get(lang, "Spanish")
+                        pipeline.process_text, chat_id, text, _LANG_NAME.get(lang, "Spanish")
                     )
                 except BackendError:
                     await update.message.reply_text(t("error_backend", lang))
@@ -130,7 +148,7 @@ def make_text_handler(deps):
             for chunk in split_message(markdown_to_telegram_html(reply)):
                 await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
             # Bonus audio reply (text already delivered, so failures are swallowed).
-            if voice_enabled and tts and (uid in voice_pref or _wants_audio(update.message.text)):
+            if voice_enabled and tts and (uid in voice_pref or _wants_audio(text)):
                 try:
                     await _send_voice(update, reply, lang)
                 except Exception:

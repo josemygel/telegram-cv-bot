@@ -1,4 +1,8 @@
-"""Configuration via environment variables (see .env.example)."""
+"""Configuration via environment variables (see .env.example).
+
+Part of the josembot project, original work by Jose Miguel Gómez Lozano
+(github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
+"""
 from __future__ import annotations
 
 import os

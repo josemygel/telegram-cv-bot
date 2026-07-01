@@ -21,6 +21,13 @@ class CvService:
         p = self._dir / f"cv_{lang}.pdf"
         return p if p.exists() else None
 
+    def thumbnail_for(self, lang: str) -> Path | None:
+        """Optional cv_{lang}_thumb.jpg shown as an inline preview next to the PDF in
+        Telegram (see Bot API sendDocument 'thumbnail'). Entirely optional — bring
+        your own JPEG (<200 kB, longest side <=320px) or skip it."""
+        p = self._dir / f"cv_{lang}_thumb.jpg"
+        return p if p.exists() else None
+
     def exists(self, lang: str) -> bool:
         return self.path_for(lang) is not None
 

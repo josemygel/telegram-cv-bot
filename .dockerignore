@@ -3,6 +3,12 @@
 logs/
 voices/
 cv/*.pdf
+cv/*.jpg
+# Real personal data — never bake it into an image you might push to a public registry.
+# (These are only excluded from git via .gitignore; Docker COPY ignores .gitignore.)
+profile/profile.md
+profile/projects.yaml
+profile/knowledge.md
 __pycache__/
 **/__pycache__/
 *.pyc

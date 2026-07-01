@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import tempfile
+import time
 from pathlib import Path
 
 from telegram.constants import ChatAction, ParseMode
@@ -21,6 +22,9 @@ from ..llm import BackendError
 from .util import mark_seen, typing_action
 
 _LANG_NAME = {"es": "Spanish", "en": "English"}
+
+MAX_VOICE_SECONDS = 120  # ~2 min; caps STT compute cost per note on a public bot
+RATE_LIMIT_SECONDS = 5  # voice is heavier (STT+LLM+TTS) than text, so a longer cooldown
 
 
 def make_voice_handler(deps):
@@ -32,6 +36,7 @@ def make_voice_handler(deps):
     voice_enabled = deps.get("voice_enabled", False)
     t = i18n.t
     busy: set[int] = set()
+    last_call: dict[int, float] = {}
 
     async def on_voice(update, context):
         uid = update.effective_user.id
@@ -40,10 +45,18 @@ def make_voice_handler(deps):
         if not (voice_enabled and stt and tts):
             await update.message.reply_text(t("voice_disabled", lang_store.get(uid)))
             return
+        if update.message.voice.duration > MAX_VOICE_SECONDS:
+            await update.message.reply_text(t("voice_too_long", lang_store.get(uid), max=MAX_VOICE_SECONDS))
+            return
+        now = time.monotonic()
+        if now - last_call.get(uid, 0.0) < RATE_LIMIT_SECONDS:
+            await update.message.reply_text(t("rate_limited", lang_store.get(uid)))
+            return
         if chat_id in busy:
             await update.message.reply_text(t("busy", lang_store.get(uid)))
             return
         busy.add(chat_id)
+        last_call[uid] = now
         try:
             async with typing_action(context.bot, chat_id, action=ChatAction.RECORD_VOICE):
                 with tempfile.TemporaryDirectory() as tmp:

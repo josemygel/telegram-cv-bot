@@ -59,11 +59,13 @@ def make_command_handlers(deps):
 
     async def contact_(update, context):
         lang = _lang(update)
-        await update.message.reply_text(t("contact_title", lang), reply_markup=keyboards.contact_menu(t, lang, contact))
+        await update.message.reply_text(
+            t("contact_title", lang, name=name), reply_markup=keyboards.contact_menu(t, lang, contact)
+        )
 
     async def help_(update, context):
         lang = _lang(update)
-        await update.message.reply_text(t("help_text", lang), parse_mode=ParseMode.HTML)
+        await update.message.reply_text(t("help_text", lang, name=name), parse_mode=ParseMode.HTML)
 
     async def voice_toggle(update, context):
         lang = _lang(update)

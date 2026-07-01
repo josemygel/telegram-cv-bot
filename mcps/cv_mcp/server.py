@@ -1,5 +1,8 @@
 """MCP server exposing Jose Miguel's profile, contact and CV / cover-letter documents.
 
+Part of the josembot project, original work by Jose Miguel Gómez Lozano
+(github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
+
 Reuses src.profile + src.cv_service so it stays in sync with the bot. Stdio MCP server:
 
     python mcps/cv_mcp/server.py

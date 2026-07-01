@@ -1,5 +1,8 @@
 """Generate starter CV PDFs (cv/cv_es.pdf, cv/cv_en.pdf) from your data.
 
+Part of the josembot project, original work by Jose Miguel Gómez Lozano
+(github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
+
 This is a simple, dependency-light generator (reportlab — no Word/LibreOffice needed). It pulls
 your name + contact from config/.env and your projects from profile/projects.yaml; the bio text
 below is a template you edit (or just bring your own designed PDFs into cv/). reportlab flows

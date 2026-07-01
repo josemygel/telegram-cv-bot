@@ -11,6 +11,9 @@ voices/
 # Generated CV PDFs — regenerate with scripts/build_cv.py. Commit them only if
 # you consider them non-confidential (the dir itself is tracked via cv/.gitkeep).
 cv/*.pdf
+# Optional inline-preview thumbnails for /cv (cv_es_thumb.jpg / cv_en_thumb.jpg) — same
+# rationale as the PDFs: your own image, commit only if you consider it non-confidential.
+cv/*.jpg
 logs/
 # Personal data (private) — the public repo ships the *.example.* templates instead.
 profile/profile.md

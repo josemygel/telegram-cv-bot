@@ -46,6 +46,7 @@ def _deps():
         "pipeline": Pipeline(llm=_FakeLLM()),
         "lang_store": InMemoryLangStore(default="es"),
         "i18n": I18n("content/i18n", default="es"),
+        "name": "Test Name",
     }
 
 

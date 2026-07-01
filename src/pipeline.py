@@ -1,5 +1,8 @@
 """Core orchestration (dependency-injected, testable).
 
+Part of the josembot project, original work by Jose Miguel Gómez Lozano
+(github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
+
 Two paths share the same conversation memory:
 - process_text:  text in  -> text reply
 - process_voice: audio in -> {transcript, reply, synthesized audio}
@@ -33,10 +36,15 @@ class Pipeline:
     tts: TTS | None = None  # required only for voice mode
     system_prompt: str = "You are a concise, friendly voice assistant."
     max_turns: int = 8
+    max_chats: int = 500  # cap in-memory history entries (public bot = untrusted chat_id churn)
     _histories: dict[int, list[dict]] = field(default_factory=dict)
 
     def _history(self, chat_id: int) -> list[dict]:
         if chat_id not in self._histories:
+            if len(self._histories) >= self.max_chats:
+                # Evict the oldest chat (insertion order) so memory can't grow unbounded
+                # under bot/scraper traffic to a public instance.
+                self._histories.pop(next(iter(self._histories)))
             self._histories[chat_id] = [{"role": "system", "content": self.system_prompt}]
         return self._histories[chat_id]
 

@@ -1,5 +1,8 @@
 """MCP server exposing Jose Miguel's structured projects (reusable by any MCP client).
 
+Part of the josembot project, original work by Jose Miguel Gómez Lozano
+(github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
+
 Reuses src.projects.ProjectsRepository as the SINGLE SOURCE OF TRUTH, so this server,
 the Telegram bot and the LLM grounding all read identical data. Runs as a stdio MCP
 server (the standard transport for desktop clients):

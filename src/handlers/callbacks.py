@@ -6,6 +6,10 @@ query.answer() first (Telegram requires it to stop the client spinner).
 """
 from __future__ import annotations
 
+import re
+import unicodedata
+from contextlib import ExitStack
+
 from telegram.constants import ChatAction, ParseMode
 
 from .. import keyboards
@@ -29,6 +33,14 @@ def make_callback_handlers(deps):
             lang_store.set(uid, resolve_lang(update.effective_user.language_code))
         return lang_store.get(uid)
 
+    def _cv_filename(cv_lang: str) -> str:
+        # Lowercase kebab-case slug, no accents: the previous "Name_CV_LANG.pdf" mixed
+        # title-case + accents with an abrupt ALL-CAPS suffix; a slug reads consistently
+        # and sidesteps any accented-filename mangling on the recipient's OS/client.
+        ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+        slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+        return f"cv-{slug}-{cv_lang}.pdf"
+
     async def on_cv(update, context):
         query = update.callback_query
         await query.answer()
@@ -44,12 +56,19 @@ def make_callback_handlers(deps):
             return
         chat_id = update.effective_chat.id
         await context.bot.send_chat_action(chat_id, ChatAction.UPLOAD_DOCUMENT)
-        with open(path, "rb") as fh:
+        thumb_path = cv_service.thumbnail_for(cv_lang)
+        with ExitStack() as stack:
+            fh = stack.enter_context(open(path, "rb"))
+            # Optional inline preview next to the PDF, in the SAME message (Bot API
+            # sendDocument 'thumbnail'; best-effort rendering — some desktop clients
+            # occasionally fall back to the generic PDF icon, mobile/web are reliable).
+            thumb = stack.enter_context(open(thumb_path, "rb")) if thumb_path else None
             await context.bot.send_document(
                 chat_id,
                 document=fh,
-                filename=f"{name.replace(' ', '_')}_CV_{cv_lang.upper()}.pdf",
+                filename=_cv_filename(cv_lang),
                 caption=t("cv_caption", lang, name=name),
+                thumbnail=thumb,
             )
 
     async def on_projects(update, context):
@@ -110,7 +129,7 @@ def make_callback_handlers(deps):
         query = update.callback_query
         await query.answer()
         lang = _lang(update)
-        await safe_edit(query, t("contact_title", lang), reply_markup=keyboards.contact_menu(t, lang, contact))
+        await safe_edit(query, t("contact_title", lang, name=name), reply_markup=keyboards.contact_menu(t, lang, contact))
 
     async def on_noop(update, context):
         await update.callback_query.answer()

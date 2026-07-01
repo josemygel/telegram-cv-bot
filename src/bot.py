@@ -1,5 +1,8 @@
 """Telegram bot: a personal assistant grounded on a profile + structured projects.
 
+Original project by Jose Miguel Gómez Lozano (github.com/josemygel/telegram-cv-bot).
+Not a fork or derivative of any other project — see AUTHORS.md and LICENSE.
+
 This module is thin WIRING only: build dependencies, build the Application and
 register handlers (which live in src/handlers/). Modes (set BOT_MODE):
 - voice: voice in -> voice out (faster-whisper -> LLM -> Piper)
@@ -22,7 +25,7 @@ from telegram.ext import (
 )
 
 from .config import (
-    ASSISTANT_NAME, BOT_MODE, LLM_BACKEND, PROFILE_PATH, TELEGRAM_TOKEN, TTS_BACKEND,
+    ADMIN_USER_IDS, ASSISTANT_NAME, BOT_MODE, LLM_BACKEND, PROFILE_PATH, TELEGRAM_TOKEN, TTS_BACKEND,
     CONTACT_EMAIL, CONTACT_GITHUB, CONTACT_LINKEDIN, CONTACT_PHONE, CONTACT_TELEGRAM, CONTACT_WHATSAPP,
 )
 from .cv_service import CvService
@@ -118,6 +121,14 @@ def main() -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     if not TELEGRAM_TOKEN:
         raise SystemExit("Set TELEGRAM_TOKEN (see .env.example).")
+    if not ADMIN_USER_IDS:
+        # /aprende and /reload let a caller inject persistent text into the LLM's grounding.
+        # Empty ADMIN_USER_IDS means ANYONE can use them — fine while testing, dangerous once
+        # the bot is reachable by strangers. Loud by design; see README -> Security.
+        log.warning(
+            "ADMIN_USER_IDS is empty: /aprende and /reload are open to ANY Telegram user. "
+            "Send /whoami to the bot and set ADMIN_USER_IDS in .env before going public."
+        )
     deps = build_dependencies()
     t = deps["i18n"].t
 

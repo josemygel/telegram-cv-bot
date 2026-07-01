@@ -16,14 +16,21 @@ python mcps/projects_mcp/server.py
 ```
 
 ## Register in Claude Desktop
-Add to `claude_desktop_config.json`:
+Add to `claude_desktop_config.json` (replace the path with the absolute path to
+**your own** clone of this repo):
 ```json
 {
   "mcpServers": {
     "josembot-projects": {
       "command": "python",
-      "args": ["C:\\Users\\josem\\Proyectos\\telegram-voice-bot\\mcps\\projects_mcp\\server.py"]
+      "args": ["<path-to-your-clone>/mcps/projects_mcp/server.py"]
     }
   }
 }
 ```
+
+## Security
+This server runs over **stdio** (the client launches it as a local subprocess) — there is no
+network listener and no auth needed. If you ever adapt it to run over HTTP/SSE instead, add
+authentication first: an unauthenticated network MCP server would let anyone on the network
+query your project data.

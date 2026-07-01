@@ -15,9 +15,9 @@ Provide secrets as the host's **env vars / secrets** (never commit `.env`):
 
 ---
 
-## Option A — Your own VPS  ⭐ (recommended for you)
-You already run a high-availability VPS (GDFitness backend, Sugo.es, Tradian). Adding a tiny
-Python service there is trivial and free (you already pay for it):
+## Option A — Your own VPS  ⭐ (if you already have one)
+If you already run a VPS for other projects, adding a tiny Python service there is trivial and
+free (you already pay for it):
 
 ```bash
 git clone <repo> /opt/telegram-voice-bot && cd /opt/telegram-voice-bot
