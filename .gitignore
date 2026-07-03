@@ -19,3 +19,5 @@ logs/
 profile/profile.md
 profile/projects.yaml
 profile/knowledge.md
+# /history conversation log (real user data — never commit this).
+data/

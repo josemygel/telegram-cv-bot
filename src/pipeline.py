@@ -95,3 +95,26 @@ class Pipeline:
         reply = self._chat(chat_id, transcript, lang)
         audio_out = self.tts.synthesize(reply, out_path)
         return {"transcript": transcript, "reply": reply, "audio": audio_out}
+
+    def process_image(self, chat_id: int, image_b64: str, caption: str, lang: str | None = None) -> dict:
+        """Vision turn: caller (handlers/photo.py) already checked the backend supports
+        it. Uses the OpenAI-compatible vision content-part format -- image_url with a
+        data: URI -- which OpenAICompatLLM forwards verbatim (it doesn't inspect
+        message shape), so no backend-specific code lives here."""
+        history = self._history(chat_id)
+        prompt_text = caption or ("Describe esta imagen." if lang == "Spanish" else "Describe this image.")
+        history.append({
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+            ],
+        })
+        reply = self._generate(history, lang)
+        if not reply:
+            reply = self._generate(history, lang, nudge=True)
+        if not reply:
+            return {"reply": ""}
+        history.append({"role": "assistant", "content": reply})
+        self._trim(history)
+        return {"reply": reply}

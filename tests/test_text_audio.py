@@ -1,5 +1,19 @@
 """Detection of explicit 'reply in audio' requests in free-text messages."""
-from src.handlers.text import _is_greeting, _wants_audio, _wants_contact
+from src.handlers.text import _is_content_free, _is_greeting, _wants_audio, _wants_contact
+
+
+def test_content_free_detects_lone_emoji():
+    assert _is_content_free("👍")
+    assert _is_content_free("🥲")
+    assert _is_content_free("😂😂😂")
+    assert _is_content_free("...")
+    assert _is_content_free("")
+
+
+def test_content_free_false_for_real_text():
+    assert not _is_content_free("hola")
+    assert not _is_content_free("👍 gracias")  # emoji + real text -> still a real message
+    assert not _is_content_free("123")  # digits count as content
 
 
 def test_detects_contact_requests():

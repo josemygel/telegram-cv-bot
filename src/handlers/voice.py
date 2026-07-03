@@ -34,9 +34,17 @@ def make_voice_handler(deps):
     stt = deps.get("stt")
     tts = deps.get("tts")
     voice_enabled = deps.get("voice_enabled", False)
+    history_store = deps.get("history_store")
     t = i18n.t
     busy: set[int] = set()
     last_call: dict[int, float] = {}
+
+    async def _log(update, chat_id: int, user_text: str, reply: str) -> None:
+        if history_store is None:
+            return
+        u = update.effective_user
+        await asyncio.to_thread(history_store.record, chat_id, u.id, u.username, u.first_name, "user", user_text)
+        await asyncio.to_thread(history_store.record, chat_id, u.id, u.username, u.first_name, "assistant", reply)
 
     async def on_voice(update, context):
         uid = update.effective_user.id
@@ -91,6 +99,7 @@ def make_voice_handler(deps):
                     if not reply:
                         await update.message.reply_text(t("empty_reply", lang))
                         return
+                    await _log(update, chat_id, transcript, reply)
 
                     # Speak the answer back as a voice note; if TTS/network fails, send text.
                     ogg_out = str(Path(tmp) / "out.ogg")

@@ -1,0 +1,13 @@
+# Run: docker compose up -d --build   (see DEPLOY.md for the full VPS walkthrough)
+services:
+  bot:
+    build: .
+    container_name: josembot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      # Persist /history's SQLite log and any generated CVs across rebuilds/redeploys —
+      # without this, `docker compose up -d --build` recreates the container and wipes
+      # anything written inside it (HISTORY_DB_PATH defaults to data/history.db).
+      - ./data:/app/data
+      - ./cv:/app/cv

@@ -33,6 +33,13 @@ OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "http://localhost:1234/v1")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "qwen/qwen3-vl-4b")
 
+# Vision: send photos to the LLM as image content parts (OpenAI-compatible vision
+# format only -- LM Studio/vLLM/OpenRouter with a vision model, e.g. qwen3-vl-4b, or
+# Groq's vision-capable models). Off by default: most configured models (e.g. Groq's
+# llama-3.3-70b-versatile) are text-only and would just ignore or error on an image.
+# Only takes effect when LLM_BACKEND=openai -- Ollama's image format isn't implemented.
+LLM_VISION = os.environ.get("LLM_VISION", "false").strip().lower() == "true"
+
 # Generation controls (shared by both backends).
 # max_tokens GENEROSO: con modelos de razonamiento, un presupuesto pequeño hace que
 # el "pensamiento" agote el cupo y la respuesta (content) llegue vacía.
@@ -68,6 +75,16 @@ KNOWLEDGE_PATH = os.environ.get("KNOWLEDGE_PATH", "profile/knowledge.md")
 ADMIN_USER_IDS = {
     int(x) for x in os.environ.get("ADMIN_USER_IDS", "").replace(" ", "").split(",") if x.isdigit()
 }
+
+# One-time bootstrap: while ADMIN_USER_IDS is empty, whoever sends "/claim <this code>"
+# to the bot becomes the first admin (see handlers/training.py). Ignored once any admin
+# exists -- there is no way to use it again after that, by design.
+ADMIN_CLAIM_CODE = os.environ.get("ADMIN_CLAIM_CODE", "")
+
+# Owner-only conversation log for /history (who talked to the bot, and what was said).
+# Off by default (empty) -- a public template shouldn't silently log conversations
+# unless the owner opts in. Only ADMIN_USER_IDS can read it back via /history.
+HISTORY_DB_PATH = os.environ.get("HISTORY_DB_PATH", "")
 
 # Contact (the /contacto buttons). Email/phone are copy-to-clipboard (Telegram url
 # buttons can't be mailto:/tel:); the rest are link buttons. Override via env.
