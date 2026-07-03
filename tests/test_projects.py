@@ -1,22 +1,24 @@
-"""ProjectsRepository over the real profile/projects.yaml (validates the data too)."""
+"""ProjectsRepository over the committed profile/projects.example.yaml (validates the
+schema without depending on profile/projects.yaml, which is git-ignored personal data
+and won't exist in CI or a fresh clone)."""
 from src.projects import ProjectsRepository
 
-REPO = ProjectsRepository("profile/projects.yaml")
+REPO = ProjectsRepository("profile/projects.example.yaml")
 
 
 def test_lists_all_projects():
     projects = REPO.list_projects()
-    assert len(projects) >= 4
+    assert len(projects) >= 2
     ids = {p.id for p in projects}
-    assert {"gdfitness", "engram-colmena", "quant-ml"} <= ids
+    assert {"example-product", "example-research"} <= ids
 
 
 def test_get_known_project():
-    gdf = REPO.get("gdfitness")
-    assert gdf is not None
-    assert "CTO" in gdf.role
-    assert gdf.scope_text("es") and gdf.scope_text("en")
-    assert gdf.participation_text("es") and gdf.participation_text("en")
+    proj = REPO.get("example-product")
+    assert proj is not None
+    assert "CTO" in proj.role
+    assert proj.scope_text("es") and proj.scope_text("en")
+    assert proj.participation_text("es") and proj.participation_text("en")
 
 
 def test_get_unknown_returns_none():

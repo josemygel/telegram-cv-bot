@@ -56,7 +56,7 @@ class _Ctx:
 def _deps(cv_dir):
     return {
         "i18n": I18n("content/i18n", default="es"),
-        "projects": ProjectsRepository("profile/projects.yaml"),
+        "projects": ProjectsRepository("profile/projects.example.yaml"),
         "cv": CvService(str(cv_dir)),
         "lang_store": InMemoryLangStore(default="es"),
         "name": "Jose Miguel",
@@ -74,6 +74,6 @@ def test_cv_missing_shows_alert_and_sends_nothing(tmp_path):
 
 def test_project_open_renders_overview(tmp_path):
     handlers = make_callback_handlers(_deps(tmp_path))
-    q = _Query("proj:open:gdfitness")
+    q = _Query("proj:open:example-product")
     asyncio.run(handlers["projects"](_Update(q), _Ctx()))
-    assert q.edits and "GDFitness" in q.edits[0]
+    assert q.edits and "Example Product" in q.edits[0]
