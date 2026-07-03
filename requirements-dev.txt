@@ -1,2 +1,3 @@
+-r requirements.txt
 pytest>=7.0
 reportlab>=4.0   # used by scripts/build_cv.py to generate the CV PDFs
