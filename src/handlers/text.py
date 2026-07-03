@@ -74,6 +74,15 @@ def _wants_contact(text: str) -> bool:
     return any(phrase in low for phrase in _CONTACT_INTENTS)
 
 
+def _is_content_free(text: str) -> bool:
+    """True for messages with no letters/digits at all -- a lone emoji ('👍', '🥲'),
+    punctuation, etc. Sending that straight to the LLM produces a jarring non-sequitur
+    (it has nothing to answer, so it dumps a generic profile summary); a light
+    acknowledgment fits better than a full grounded answer for a message with no
+    actual question in it."""
+    return not re.search(r"\w", text or "", re.UNICODE)
+
+
 def make_text_handler(deps):
     pipeline = deps["pipeline"]
     lang_store = deps["lang_store"]
@@ -85,9 +94,17 @@ def make_text_handler(deps):
         voice_pref = set()
     contact = deps.get("contact") or {}
     name = deps["name"]
+    history_store = deps.get("history_store")
     t = i18n.t
     busy: set[int] = set()
     last_call: dict[int, float] = {}
+
+    async def _log(update, chat_id: int, user_text: str, reply: str) -> None:
+        if history_store is None:
+            return
+        u = update.effective_user
+        await asyncio.to_thread(history_store.record, chat_id, u.id, u.username, u.first_name, "user", user_text)
+        await asyncio.to_thread(history_store.record, chat_id, u.id, u.username, u.first_name, "assistant", reply)
 
     async def _send_voice(update, reply: str, lang: str) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,15 +124,24 @@ def make_text_handler(deps):
         await mark_seen(update.message)
         if _is_greeting(text):
             # Fixed, formatted welcome — no LLM, so it's instant and always consistent.
-            await update.message.reply_text(
-                markdown_to_telegram_html(t("greeting", lang)), parse_mode=ParseMode.HTML
-            )
+            reply = t("greeting", lang)
+            await update.message.reply_text(markdown_to_telegram_html(reply), parse_mode=ParseMode.HTML)
+            # Logged too: a visitor who only says "hola" and leaves should still show
+            # up in /history — otherwise first contacts are invisible to the owner.
+            await _log(update, chat_id, text, reply)
             return
         if _wants_contact(text):
             # Show the contact buttons instead of an LLM text dump.
-            await update.message.reply_text(
-                t("contact_title", lang, name=name), reply_markup=keyboards.contact_menu(t, lang, contact)
-            )
+            reply = t("contact_title", lang, name=name)
+            await update.message.reply_text(reply, reply_markup=keyboards.contact_menu(t, lang, contact))
+            await _log(update, chat_id, text, reply)
+            return
+        if _is_content_free(text):
+            # A lone emoji/punctuation has no question in it -- skip the LLM entirely
+            # rather than let it invent a generic profile dump out of nowhere.
+            reply = t("content_free_reply", lang, name=name)
+            await update.message.reply_text(reply)
+            await _log(update, chat_id, text, reply)
             return
         if len(text) > MAX_MESSAGE_CHARS:
             await update.message.reply_text(t("message_too_long", lang, max=MAX_MESSAGE_CHARS))
@@ -145,6 +171,7 @@ def make_text_handler(deps):
             if not reply:
                 await update.message.reply_text(t("empty_reply", lang))
                 return
+            await _log(update, chat_id, text, reply)
             for chunk in split_message(markdown_to_telegram_html(reply)):
                 await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
             # Bonus audio reply (text already delivered, so failures are swallowed).

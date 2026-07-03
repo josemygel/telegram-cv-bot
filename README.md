@@ -161,7 +161,9 @@ python -m src.bot          # starts the bot (text + voice)
 python chat_cli.py         # quick test in the terminal, no Telegram
 ```
 Talk to your bot in Telegram. Commands: `/start`, `/menu`, `/proyectos`, `/cv`, `/contacto`,
-`/idioma`, `/voz`, `/help` — plus owner-only `/aprende`, `/reload`, `/whoami`.
+`/idioma`, `/voz`, `/help` — plus owner-only `/aprende`, `/reload`, `/whoami`, `/history`,
+`/info` (running version, host/container id, uptime and active config — handy to verify
+WHICH instance is answering when you suspect a stray duplicate is polling your token).
 
 ---
 
@@ -181,6 +183,7 @@ instead of leaving it blank.
 | `OPENAI_MODEL` | If `LLM_BACKEND=openai` | `qwen/qwen3-vl-4b` | Model id/name as your endpoint expects it. |
 | `LLM_MAX_TOKENS` | No | `1024` | Generous on purpose — reasoning models can burn the budget on hidden "thinking" before the visible answer. |
 | `LLM_TEMPERATURE` | No | `0.3` | Kept low for grounded-QA fidelity (higher invites drifting from the profile). |
+| `LLM_VISION` | No | `false` | Send photos to the LLM as vision content. **Only works with `LLM_BACKEND=openai` + a vision-capable model** (e.g. LM Studio's `qwen3-vl-4b`) — most models (Groq's `llama-3.3-70b-versatile` included) are text-only. Ignored under `LLM_BACKEND=ollama` (not implemented). |
 | `OLLAMA_URL` | If `LLM_BACKEND=ollama` | `http://localhost:11434` | Local Ollama daemon URL. |
 | `LLM_MODEL` | If `LLM_BACKEND=ollama` | `llama3.2` | Ollama model tag. |
 | `WHISPER_MODEL` | Voice mode only | `small` | faster-whisper model size (`tiny`…`large-v3`). |
@@ -196,7 +199,9 @@ instead of leaving it blank.
 | `CV_DIR` | No | `cv` | Where `/cv` looks for `cv_es.pdf` / `cv_en.pdf`. |
 | `I18N_DIR` | No | `content/i18n` | Bot UI strings (`es.yaml` / `en.yaml`). |
 | `BOT_LANG` | No | `en` | Fallback UI language if a user's Telegram client language can't be resolved. |
-| `ADMIN_USER_IDS` | **Recommended** | *(empty)* | Comma-separated numeric Telegram ids allowed to use `/aprende` and `/reload`. **Empty = open to everyone** — the bot warns loudly at startup if so; get your id via `/whoami`. |
+| `ADMIN_USER_IDS` | **Recommended** | *(empty)* | Comma-separated numeric Telegram ids allowed to use `/aprende`, `/reload` and `/history`. **Empty = open to everyone** — the bot warns loudly at startup if so; get your id via `/whoami`, or use `ADMIN_CLAIM_CODE` below. |
+| `ADMIN_CLAIM_CODE` | No | *(empty)* | One-time bootstrap: while `ADMIN_USER_IDS` is empty, sending `/claim <this code>` to the bot registers the sender as the first admin (written back into `.env` automatically). Only works once — ignored the moment any admin exists. |
+| `HISTORY_DB_PATH` | No | *(empty)* | SQLite path for the owner-only `/history` conversation log. **Empty = disabled** (no logging at all). Only `ADMIN_USER_IDS` can read it back. |
 | `CONTACT_EMAIL` | No | `you@example.com` | Shown as a copy button; blank hides it. |
 | `CONTACT_PHONE` | No | `+00 000 000 000` | Copy button (Telegram buttons can't be `tel:`). |
 | `CONTACT_WHATSAPP` | No | *(digits only)* | Builds a `wa.me/<digits>` link. |
@@ -213,8 +218,10 @@ cover the use case. Voice messages longer than 120s and rapid-fire voice notes a
 [Security](#security)).
 
 ## Hosting 24/7 (free)
-On Groq the bot is lightweight (no GPU). Run it on your own VPS / an Oracle Cloud Always-Free VM
-(systemd unit in `deploy/`) or a no-sleep container host (Koyeb, Fly.io). Full guide: **[DEPLOY.md](DEPLOY.md)**.
+On Groq the bot is lightweight (no GPU) and uses polling, so **no domain/subdomain or reverse
+proxy is needed**. Run it on your own VPS (Docker via the included `docker-compose.yml`, or a
+systemd unit in `deploy/`) or an Oracle Cloud Always-Free VM. Full guide, including which free
+container hosts (Koyeb, Fly.io) no longer work for this as of mid-2026: **[DEPLOY.md](DEPLOY.md)**.
 For a local always-on launch, `run_bot.ps1` (Windows) starts everything.
 
 ## MCP servers
@@ -266,9 +273,17 @@ recruiters. Defaults are chosen accordingly:
   `cv/*.pdf`) is excluded from **both** git (`.gitignore`) **and** Docker builds
   (`.dockerignore`) — the repo ships `*.example.*` templates instead. Docker's `COPY` ignores
   `.gitignore`, so both files matter if you build the image locally.
-- **Owner-only commands** (`/aprende`, `/reload`) are gated by `ADMIN_USER_IDS`. If it's left
-  empty, the bot logs a startup warning because that means anyone can use them — set it before
-  exposing the bot publicly.
+- **Owner-only commands** (`/aprende`, `/reload`, `/history`) are gated by `ADMIN_USER_IDS`. If
+  it's left empty, the bot logs a startup warning because that means anyone can use them —
+  including reading back *other people's* conversations via `/history` — set it before exposing
+  the bot publicly.
+- **`/history` is opt-in and hidden, not just gated**: disabled by default (`HISTORY_DB_PATH`
+  empty means no logging happens at all). If you enable it, the command is also hidden from
+  everyone else's command menu (via Telegram's per-chat `BotCommandScopeChat`) — but that's
+  cosmetic UX only, **not** the real security boundary; Telegram does not enforce menu scopes
+  server-side, so a stranger who somehow typed `/history` by hand would still hit the same
+  `ADMIN_USER_IDS` check as everyone else. If you enable this, consider mentioning in your
+  `/help` text that conversations may be logged (already done in the default i18n strings).
 - **Rate limiting & input caps**: text messages are limited to one per 3s per user and capped at
   1500 characters; voice notes are limited to one per 5s per user and capped at 120s — this
   protects you from both cost abuse (hosted LLM APIs bill per token) and local resource abuse
@@ -303,6 +318,9 @@ recruiters. Defaults are chosen accordingly:
   `WHISPER_COMPUTE=float16` instead.
 - **"anyone can use `/aprende` or `/reload`"** — `ADMIN_USER_IDS` is empty. Send `/whoami` to the
   bot to get your numeric id and set it in `.env`.
+- **Bot ignores photos, or replies "I can't process images"** — vision is off by
+  default (`LLM_VISION=false`), and even when on it only works with
+  `LLM_BACKEND=openai` + a vision-capable model. Check both before assuming it's broken.
 - **`/cv` thumbnail doesn't show (falls back to a plain PDF icon)** — this is best-effort on
   Telegram's side, not a bug here: it's reliable on mobile/web but Telegram Desktop has a known,
   unresolved bug where document thumbnails intermittently don't render for some file types.

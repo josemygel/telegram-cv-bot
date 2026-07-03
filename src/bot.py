@@ -14,8 +14,10 @@ Run:  python -m src.bot
 from __future__ import annotations
 
 import logging
+import socket
+from datetime import datetime, timezone
 
-from telegram import BotCommand
+from telegram import BotCommand, BotCommandScopeChat
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -25,22 +27,29 @@ from telegram.ext import (
 )
 
 from .config import (
-    ADMIN_USER_IDS, ASSISTANT_NAME, BOT_MODE, LLM_BACKEND, PROFILE_PATH, TELEGRAM_TOKEN, TTS_BACKEND,
-    CONTACT_EMAIL, CONTACT_GITHUB, CONTACT_LINKEDIN, CONTACT_PHONE, CONTACT_TELEGRAM, CONTACT_WHATSAPP,
+    ADMIN_USER_IDS, ASSISTANT_NAME, BOT_MODE, HISTORY_DB_PATH, LLM_BACKEND, LLM_MODEL, LLM_VISION,
+    OPENAI_MODEL, PROFILE_PATH, TELEGRAM_TOKEN, TTS_BACKEND, CONTACT_EMAIL, CONTACT_GITHUB,
+    CONTACT_LINKEDIN, CONTACT_PHONE, CONTACT_TELEGRAM, CONTACT_WHATSAPP,
 )
 from .cv_service import CvService
 from .grounding import build_grounded_prompt
 from .handlers.callbacks import make_callback_handlers
 from .handlers.commands import make_command_handlers
 from .handlers.errors import make_error_handler
+from .handlers.history import make_history_handlers
+from .handlers.info import make_info_handler
+from .handlers.photo import make_photo_handler
+from .handlers.sticker import make_sticker_handler
 from .handlers.text import make_text_handler
 from .handlers.training import make_training_handlers
 from .handlers.voice import make_voice_handler
+from .history_store import HistoryStore
 from .i18n import I18n
 from .lang_store import InMemoryLangStore
 from .pipeline import Pipeline
 from .projects import ProjectsRepository
 from .runtime import get_llm, gpu_available, resolve_mode
+from .version import __version__
 
 log = logging.getLogger("josembot")
 
@@ -51,6 +60,9 @@ _COMMANDS = [
     ("start", "start"), ("menu", "menu"), ("proyectos", "projects"), ("cv", "cv"),
     ("contacto", "contact"), ("idioma", "language"), ("voz", "voice"), ("help", "help"),
 ]
+# Extra commands appended ONLY to the admin's own chat menu (cosmetic UX scoping via
+# BotCommandScopeChat -- NOT a security boundary; see handlers/history.py docstring).
+_ADMIN_COMMANDS = [("history", "history"), ("info", "info")]
 
 
 def build_dependencies() -> dict:
@@ -81,10 +93,25 @@ def build_dependencies() -> dict:
         "email": CONTACT_EMAIL, "phone": CONTACT_PHONE, "whatsapp": CONTACT_WHATSAPP,
         "linkedin": CONTACT_LINKEDIN, "github": CONTACT_GITHUB, "telegram": CONTACT_TELEGRAM,
     }
+    history_store = HistoryStore(HISTORY_DB_PATH) if HISTORY_DB_PATH else None
+    # Vision only implemented for the OpenAI-compatible transport (image_url content
+    # parts); Ollama's image format differs and isn't implemented -- fall back to the
+    # graceful decline in handlers/photo.py rather than sending a request it can't use.
+    vision_enabled = LLM_VISION and LLM_BACKEND.lower() == "openai"
+    # Surfaced by the owner-only /info command to verify WHICH build is answering.
+    runtime_info = {
+        "version": __version__,
+        "mode": MODE,
+        "llm_backend": LLM_BACKEND,
+        "llm_model": OPENAI_MODEL if LLM_BACKEND.lower() == "openai" else LLM_MODEL,
+        "started_at": datetime.now(timezone.utc),
+    }
     return {
         "i18n": i18n, "projects": projects, "cv": cv, "lang_store": lang_store,
         "name": ASSISTANT_NAME, "pipeline": pipeline, "contact": contact,
         "stt": stt, "tts": tts, "voice_enabled": voice_enabled, "voice_pref": set(),
+        "history_store": history_store, "vision_enabled": vision_enabled,
+        "runtime_info": runtime_info,
     }
 
 
@@ -104,6 +131,15 @@ def _register_handlers(app: Application, deps: dict) -> None:
     app.add_handler(CommandHandler("whoami", tr["whoami"]))
     app.add_handler(CommandHandler(["aprende", "learn"], tr["aprende"]))
     app.add_handler(CommandHandler(["reload", "recargar"], tr["reload"]))
+    # /claim: one-time admin bootstrap. Deliberately never added to ANY command menu
+    # (public or admin-scoped) -- see handlers/training.py.
+    app.add_handler(CommandHandler("claim", tr["claim"]))
+    # Owner-only conversation history (not in the public menu; see handlers/history.py).
+    hist = make_history_handlers(deps)
+    app.add_handler(CommandHandler("history", hist["history"]))
+    app.add_handler(CallbackQueryHandler(hist["history_callback"], pattern=r"^hist:"))
+    # Owner-only build/instance info (version, host, uptime; see handlers/info.py).
+    app.add_handler(CommandHandler("info", make_info_handler(deps)))
     app.add_handler(CallbackQueryHandler(cb["cv"], pattern=r"^cv:"))
     app.add_handler(CallbackQueryHandler(cb["contact"], pattern=r"^contact:"))
     app.add_handler(CallbackQueryHandler(cb["projects"], pattern=r"^proj:"))
@@ -112,6 +148,8 @@ def _register_handlers(app: Application, deps: dict) -> None:
     app.add_handler(CallbackQueryHandler(cb["noop"], pattern=r"^noop$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, make_text_handler(deps)))
     app.add_handler(MessageHandler(filters.VOICE, make_voice_handler(deps)))
+    app.add_handler(MessageHandler(filters.PHOTO, make_photo_handler(deps)))
+    app.add_handler(MessageHandler(filters.Sticker.ALL, make_sticker_handler(deps)))
     app.add_error_handler(make_error_handler(deps))
 
 
@@ -122,11 +160,13 @@ def main() -> None:
     if not TELEGRAM_TOKEN:
         raise SystemExit("Set TELEGRAM_TOKEN (see .env.example).")
     if not ADMIN_USER_IDS:
-        # /aprende and /reload let a caller inject persistent text into the LLM's grounding.
-        # Empty ADMIN_USER_IDS means ANYONE can use them — fine while testing, dangerous once
-        # the bot is reachable by strangers. Loud by design; see README -> Security.
+        # /aprende, /reload and /history let a caller inject grounding text or read back
+        # everyone's conversations. Empty ADMIN_USER_IDS means ANYONE can use them — fine
+        # while testing, dangerous once the bot is reachable by strangers. Loud by design;
+        # see README -> Security.
         log.warning(
-            "ADMIN_USER_IDS is empty: /aprende and /reload are open to ANY Telegram user. "
+            "ADMIN_USER_IDS is empty: /aprende, /reload and /history are open to ANY Telegram "
+            "user (including reading back OTHER people's conversations via /history). "
             "Send /whoami to the bot and set ADMIN_USER_IDS in .env before going public."
         )
     deps = build_dependencies()
@@ -139,10 +179,21 @@ def main() -> None:
                 [BotCommand(c, t(f"cmd_{key}", lang)) for c, key in _COMMANDS], language_code=lang
             )
         await app.bot.set_my_commands([BotCommand(c, t(f"cmd_{key}", "es")) for c, key in _COMMANDS])
+        # Admin-only extras (e.g. /history), visible ONLY in that admin's own chat menu.
+        # Cosmetic scoping only -- see handlers/history.py for why this is not the real gate.
+        for admin_id in ADMIN_USER_IDS:
+            await app.bot.set_my_commands(
+                [BotCommand(c, t(f"cmd_{key}", "es")) for c, key in _COMMANDS + _ADMIN_COMMANDS],
+                scope=BotCommandScopeChat(chat_id=admin_id),
+            )
 
     app = Application.builder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     _register_handlers(app, deps)
-    print(f"Bot running in {MODE.upper()} mode. Press Ctrl+C to stop.")
+    # Version + host in the startup log so `docker logs` (or the Plesk console) shows
+    # at a glance WHICH build came up and where — pairs with the owner's /info command.
+    log.info("josembot v%s starting (mode=%s, host=%s, llm=%s)",
+             __version__, MODE, socket.gethostname(), LLM_BACKEND)
+    print(f"josembot v{__version__} running in {MODE.upper()} mode. Press Ctrl+C to stop.")
     app.run_polling()
 
 
