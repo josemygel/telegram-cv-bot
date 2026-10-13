@@ -23,7 +23,7 @@ COPY chat_cli.py .
 # Usuario sin privilegios (uid fijo para que los volumenes montados se puedan preparar con chown).
 # /models guarda el modelo de Whisper (~1.6 GB) para no re-descargarlo en cada despliegue; es un
 # volumen porque el sistema de ficheros del contenedor va de solo lectura.
-RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin bot     && mkdir -p /models /app/data /app/cv && chown -R bot /models /app/data /app/cv
+RUN useradd --uid 61001 --no-create-home --shell /usr/sbin/nologin bot     && mkdir -p /models /app/data /app/cv && chown -R bot /models /app/data /app/cv
 ENV HF_HOME=/models HOME=/tmp
 USER bot
 
