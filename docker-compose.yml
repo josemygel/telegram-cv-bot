@@ -2,6 +2,7 @@
 services:
   bot:
     build: .
+    image: josembot:prod   # una sola imagen viva: las anteriores quedan <none> y se podan por LABEL
     container_name: josembot
     restart: unless-stopped
     env_file: .env

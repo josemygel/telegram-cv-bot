@@ -128,6 +128,7 @@ Same as `docker-compose.yml` in this repo. Merge these keys into the `bot` servi
 prod `name`, `container_name: josembot-prod`, `build: .`, `env_file`, and **no `ports`**):
 
 ```yaml
+    image: josembot:prod   # junto a `build: .`: una sola imagen viva
     environment:
       BOT_MODE: voice
       WHISPER_CPU_THREADS: "6"
