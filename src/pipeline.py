@@ -136,6 +136,23 @@ class Pipeline:
         self._trim(history)
         return {"reply": reply}
 
+    # Para el DUENO, fotos y PDF se analizan como asistente personal: el prompt publico del CV
+    # (pensado para reclutadores) hacia que se negara a leer sus propias facturas o desviara la
+    # charla hacia su experiencia. Sin perfil ni historial: mas barato y sin contexto que estorbe.
+    OWNER_MEDIA_PROMPT = (
+        "Eres el asistente personal de tu dueno. Analiza el documento o la imagen que te envia "
+        "y responde exactamente a lo que pide, de forma clara y concisa, en el idioma de su "
+        "mensaje (espanol por defecto). Puedes leer y citar cualquier dato del contenido: es suyo."
+    )
+
+    def analyze_media_for_owner(self, media_part: dict, caption: str, kind: str) -> dict:
+        default = "Resume este documento." if kind == "pdf" else "Describe esta imagen."
+        reply = self.llm.reply([
+            {"role": "system", "content": self.OWNER_MEDIA_PROMPT},
+            {"role": "user", "content": [{"type": "text", "text": caption or default}, media_part]},
+        ]).strip()
+        return {"reply": reply}
+
     def run_task(self, instruction: str, text: str) -> str:
         """Tarea de una sola vez (resumir, traducir) sin perfil ni historial: es mas barata y
         el perfil del dueno no tiene nada que aportar a traducir un texto."""

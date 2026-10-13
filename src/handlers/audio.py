@@ -11,6 +11,7 @@ Privacidad: del contenido de terceros solo se guarda en /history el marcador con
 from __future__ import annotations
 
 import asyncio
+import logging
 import tempfile
 import time
 from pathlib import Path
@@ -107,6 +108,8 @@ def make_audio_handler(deps):
                 return
             await _answer_for_user(update, context, bubble, chunks, result, dur)
         except Exception:  # noqa: BLE001 - cualquier fallo -> mensaje corto, nunca silencio
+            # Sin esta traza el fallo era invisible en produccion (solo «Ups, algo ha fallado»).
+            logging.getLogger("josembot.audio").exception("Fallo procesando un audio")
             try:
                 await bubble.edit(t("error_generic", lang))
             except Exception:  # noqa: BLE001

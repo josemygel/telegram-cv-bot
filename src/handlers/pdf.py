@@ -5,6 +5,8 @@ Topes en orden barato->caro: peso informado por Telegram (sin descargar) -> desc
 """
 from __future__ import annotations
 
+import logging
+
 import asyncio
 import base64
 import tempfile
@@ -79,8 +81,13 @@ def make_pdf_handler(deps):
                 pdf_b64 = base64.b64encode(Path(path).read_bytes()).decode("ascii")
             call_context.set((uid, "pdf"))
             try:
-                out = await asyncio.to_thread(pipeline.process_pdf, chat_id, pdf_b64,
-                                              (msg.caption or "").strip(), _LANG_NAME.get(lang, "Spanish"))
+                if uid == deps.get("owner_id"):
+                    part = {"type": "pdf", "data": pdf_b64}
+                    out = await asyncio.to_thread(pipeline.analyze_media_for_owner, part,
+                                                  (msg.caption or "").strip(), "pdf")
+                else:
+                    out = await asyncio.to_thread(pipeline.process_pdf, chat_id, pdf_b64,
+                                                  (msg.caption or "").strip(), _LANG_NAME.get(lang, "Spanish"))
             except BackendError:
                 await bubble.edit(t("error_backend", lang))
                 return
@@ -88,6 +95,7 @@ def make_pdf_handler(deps):
             reply = (out.get("reply") or "").strip() or t("empty_reply", lang)
             await bubble.show(split_message(markdown_to_telegram_html(reply)))
         except Exception:  # noqa: BLE001
+            logging.getLogger("josembot.pdf").exception("Fallo procesando un PDF")
             try:
                 await bubble.edit(t("error_generic", lang))
             except Exception:  # noqa: BLE001

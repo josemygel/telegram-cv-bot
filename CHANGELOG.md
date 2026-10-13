@@ -2,6 +2,19 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.2] - 2026-10-13
+
+### 🐛 Corregido
+- **Fotos y PDF del dueño se analizan como asistente personal.** Con el prompt público del CV,
+  Haiku se negaba a leer los datos de una factura del propio dueño («no voy a detallar los datos
+  bancarios…») y desviaba la conversación hacia su experiencia. Ahora, si quien envía es
+  `OWNER_USER_ID`, se usa un prompt de asistente personal, sin perfil ni historial (más barato,
+  y el contenido privado no entra en el historial público). Para el resto no cambia nada.
+- **La respuesta a una foto salía con `**asteriscos**` literales**: no pasaba por la conversión de
+  Markdown a HTML que ya usan el texto y los PDF.
+- **Los fallos de audio, foto y PDF ahora dejan traza en el log.** El manejador se tragaba la
+  excepción y en producción solo se veía «Ups, algo ha fallado», sin forma de saber la causa.
+
 ## [1.3.1] - 2026-10-13
 
 ### 🐛 Corregido
