@@ -2,6 +2,15 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.1] - 2026-10-13
+
+### 🐛 Corregido
+- **El log ya dice POR QUÉ Anthropic rechaza una petición.** En producción solo aparecía
+  `POST /v1/messages "HTTP/1.1 400 Bad Request"`: imposible distinguir saldo agotado
+  («credit balance is too low»), un modelo inexistente o un parámetro no admitido. Ahora cada
+  error del SDK se registra con su tipo y el mensaje de la API (nunca contiene la clave, que viaja
+  en la cabecera).
+
 ## [1.3.0] - 2026-10-13
 
 ### ✨ Añadido
