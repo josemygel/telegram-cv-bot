@@ -144,6 +144,10 @@ class AnthropicLLM:
                 output_config={"effort": ANTHROPIC_EFFORT},
             )
         except Exception as exc:  # noqa: BLE001 - traducimos todo a BackendError
+            # El mensaje de la API (p. ej. «credit balance is too low», modelo o parametro no
+            # valido) es lo UNICO que permite diagnosticar un 400 en produccion; sin el, el log solo
+            # dice "400 Bad Request". Nunca contiene la clave (va en la cabecera, no en el cuerpo).
+            log.warning("Anthropic %s: %s", type(exc).__name__, getattr(exc, "message", exc))
             raise _translate(exc) from exc
 
         usage = _usage_of(resp)
