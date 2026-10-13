@@ -13,11 +13,18 @@ import tempfile
 import time
 from pathlib import Path
 
+import logging
+
+from telegram.constants import ParseMode
+
 from ..config import MAX_PHOTO_BYTES
+from ..formatting import markdown_to_telegram_html, split_message
 from ..llm import BackendError
 from ..token_ledger import call_context
 from .guard import after_call, refuse_if_blocked
 from .util import mark_seen, typing_action
+
+log = logging.getLogger("josembot.photo")
 
 _LANG_NAME = {"es": "Spanish", "en": "English"}
 RATE_LIMIT_SECONDS = 5  # vision calls are heavier than plain text
@@ -83,13 +90,18 @@ def make_photo_handler(deps):
                         return
                     image_b64 = base64.b64encode(raw).decode("ascii")
                 try:
-                    out = await asyncio.to_thread(
-                        pipeline.process_image, chat_id, image_b64, caption, _LANG_NAME.get(lang, "Spanish")
-                    )
+                    if uid == deps.get("owner_id"):
+                        part = {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+                        out = await asyncio.to_thread(pipeline.analyze_media_for_owner, part, caption, "image")
+                    else:
+                        out = await asyncio.to_thread(
+                            pipeline.process_image, chat_id, image_b64, caption, _LANG_NAME.get(lang, "Spanish")
+                        )
                 except BackendError:
                     await update.message.reply_text(t("error_backend", lang))
                     return
                 except Exception:
+                    log.exception("Fallo analizando una foto")
                     await update.message.reply_text(t("error_generic", lang))
                     return
             await after_call(deps, context, update.effective_user)
@@ -98,7 +110,9 @@ def make_photo_handler(deps):
                 await update.message.reply_text(t("empty_reply", lang))
                 return
             await _log(update, chat_id, caption or "[image]", reply)
-            await update.message.reply_text(reply)
+            # La respuesta del LLM viene en Markdown: sin convertirla salian **asteriscos** literales.
+            for chunk in split_message(markdown_to_telegram_html(reply)):
+                await update.message.reply_text(chunk, parse_mode=ParseMode.HTML)
         finally:
             busy.discard(chat_id)
 
