@@ -23,17 +23,20 @@ from telegram.ext import (
     CallbackQueryHandler,
     ChatMemberHandler,
     CommandHandler,
+    InlineQueryHandler,
     MessageHandler,
     filters,
 )
 
 from .config import (
     ADMIN_USER_IDS, ANTHROPIC_MODEL, ASSISTANT_NAME, BOT_MODE, HISTORY_DB_PATH, LLM_BACKEND, LLM_MODEL, LLM_VISION,
-    OPENAI_MODEL, OWNER_USER_ID, PROFILE_PATH, TOKEN_LIMIT_DAY, TOKEN_LIMIT_HOUR, USAGE_DB_PATH, TELEGRAM_TOKEN, TTS_BACKEND, CONTACT_EMAIL, CONTACT_GITHUB,
+    OPENAI_MODEL, OWNER_USER_ID, ACTIONS_DB_PATH, ACTIONS_TTL_HOURS, PROFILE_PATH, TOKEN_LIMIT_DAY, TOKEN_LIMIT_HOUR, USAGE_DB_PATH, TELEGRAM_TOKEN, TTS_BACKEND, CONTACT_EMAIL, CONTACT_GITHUB,
     CONTACT_LINKEDIN, CONTACT_PHONE, CONTACT_TELEGRAM, CONTACT_WHATSAPP,
 )
 from .cv_service import CvService
 from .grounding import build_grounded_prompt
+from .handlers.actions import make_action_handler
+from .handlers.audio import make_audio_handler
 from .handlers.callbacks import make_callback_handlers
 from .handlers.commands import make_command_handlers
 from .handlers.cost import make_cost_handlers
@@ -41,12 +44,16 @@ from .handlers.errors import make_error_handler
 from .handlers.guard import make_group_guard, make_ignored_media_handler
 from .handlers.history import make_history_handlers
 from .handlers.info import make_info_handler
+from .handlers.inline import make_inline_handler
+from .handlers.pdf import make_pdf_handler
 from .handlers.photo import make_photo_handler
 from .handlers.sticker import make_sticker_handler
 from .handlers.text import make_text_handler
 from .handlers.training import make_training_handlers
-from .handlers.voice import make_voice_handler
+from .action_store import ActionStore
 from .history_store import HistoryStore
+from .job_queue import SingleWorkerQueue
+from .vocab import build_initial_prompt
 from .i18n import I18n
 from .lang_store import InMemoryLangStore
 from .pipeline import Pipeline
@@ -94,17 +101,24 @@ def build_dependencies() -> dict:
 
     # Voice (STT/TTS) is enabled unless BOT_MODE=text. Built lazily and guarded so a
     # missing dependency degrades to text-only instead of crashing the bot.
+    # STT local y TTS se construyen por separado y con guarda: que falte edge-tts (TTS) no
+    # debe tumbar la transcripcion, y viceversa.
     stt = tts = None
     voice_enabled = MODE == "voice"
     if voice_enabled:
         try:
             from .stt import WhisperSTT
+
+            stt = WhisperSTT(initial_prompt=build_initial_prompt(projects.list_projects()))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Transcription disabled (faster-whisper unavailable): %s", exc)
+        try:
             from .tts import get_tts
 
-            stt, tts = WhisperSTT(), get_tts(TTS_BACKEND)
+            tts = get_tts(TTS_BACKEND)
         except Exception as exc:  # noqa: BLE001
-            log.warning("Voice disabled (deps unavailable): %s", exc)
-            voice_enabled = False
+            log.info("TTS unavailable (audio replies off): %s", exc)
+        voice_enabled = tts is not None and stt is not None
 
     contact = {
         "email": CONTACT_EMAIL, "phone": CONTACT_PHONE, "whatsapp": CONTACT_WHATSAPP,
@@ -130,6 +144,8 @@ def build_dependencies() -> dict:
         "stt": stt, "tts": tts, "voice_enabled": voice_enabled, "voice_pref": set(),
         "history_store": history_store, "vision_enabled": vision_enabled,
         "runtime_info": runtime_info, "ledger": ledger,
+        "queue": SingleWorkerQueue(), "action_store": ActionStore(ACTIONS_DB_PATH, ACTIONS_TTL_HOURS),
+        "pdf_enabled": LLM_BACKEND.lower() == "anthropic",
         "owner_id": OWNER_USER_ID, "admin_ids": set(ADMIN_USER_IDS) | ({OWNER_USER_ID} - {0}),
     }
 
@@ -172,12 +188,17 @@ def _register_handlers(app: Application, deps: dict) -> None:
     app.add_handler(CallbackQueryHandler(cb["nav"], pattern=r"^nav:"))
     app.add_handler(CallbackQueryHandler(cb["noop"], pattern=r"^noop$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, make_text_handler(deps)))
-    app.add_handler(MessageHandler(filters.VOICE, make_voice_handler(deps)))
+    app.add_handler(CallbackQueryHandler(make_action_handler(deps), pattern=r"^act:"))
+    app.add_handler(InlineQueryHandler(make_inline_handler(deps)))
+    # Voz + audios + archivos de audio (los no-voz solo los atiende el dueno, ver handlers/audio.py).
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.Document.AUDIO,
+                                   make_audio_handler(deps)))
+    app.add_handler(MessageHandler(filters.Document.PDF, make_pdf_handler(deps)))
     app.add_handler(MessageHandler(filters.PHOTO, make_photo_handler(deps)))
     app.add_handler(MessageHandler(filters.Sticker.ALL, make_sticker_handler(deps)))
     # Video / notas de video / documentos / animaciones / audio: ignorados sin descargar.
     app.add_handler(MessageHandler(
-        filters.VIDEO | filters.VIDEO_NOTE | filters.Document.ALL | filters.ANIMATION | filters.AUDIO,
+        filters.VIDEO | filters.VIDEO_NOTE | filters.Document.ALL | filters.ANIMATION,
         make_ignored_media_handler(deps)))
     app.add_error_handler(make_error_handler(deps))
 

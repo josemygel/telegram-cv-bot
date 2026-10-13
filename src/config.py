@@ -57,9 +57,25 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "1024"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.3"))
 
 # Speech-to-text (faster-whisper) — only used in voice mode
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base")
-WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "auto")
+# large-v3-turbo: el dueno prioriza calidad sobre velocidad (en el VPS de 2 CPUs un clip de 11 s
+# tarda ~39 s con turbo frente a ~11 s con small, y lo acepta). Se carga una sola vez y en CPU.
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
+WHISPER_DEVICE = os.environ.get("WHISPER_DEVICE", "cpu")
 WHISPER_COMPUTE = os.environ.get("WHISPER_COMPUTE", "int8")
+WHISPER_CPU_THREADS = int(os.environ.get("WHISPER_CPU_THREADS", "6"))
+
+# Topes de audio, comprobados con lo que Telegram informa ANTES de descargar.
+MAX_AUDIO_SECONDS_OWNER = int(os.environ.get("MAX_AUDIO_SECONDS_OWNER", "300"))
+MAX_AUDIO_SECONDS_USER = int(os.environ.get("MAX_AUDIO_SECONDS_USER", "60"))
+MAX_AUDIO_BYTES = int(os.environ.get("MAX_AUDIO_BYTES", str(20 * 1024 * 1024)))
+# PDF (todos los usuarios, solo con LLM_BACKEND=anthropic): peso y paginas.
+MAX_PDF_BYTES = int(os.environ.get("MAX_PDF_BYTES", str(5 * 1024 * 1024)))
+MAX_PDF_PAGES = int(os.environ.get("MAX_PDF_PAGES", "5"))
+# Botones del dueno (Responder/Resumir/Traducir): el texto fuente se guarda en SQLite con TTL.
+ACTIONS_DB_PATH = os.environ.get("ACTIONS_DB_PATH", "data/actions.db")
+ACTIONS_TTL_HOURS = int(os.environ.get("ACTIONS_TTL_HOURS", "48"))
+# Modo inline (solo dueno): tope de caracteres a traducir por consulta.
+INLINE_MAX_CHARS = int(os.environ.get("INLINE_MAX_CHARS", "500"))
 
 # Text-to-speech — used in voice mode / for audio replies
 TTS_BACKEND = os.environ.get("TTS_BACKEND", "edge")  # edge (online, ES/EN neural) | piper (local)

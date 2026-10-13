@@ -118,3 +118,28 @@ class Pipeline:
         history.append({"role": "assistant", "content": reply})
         self._trim(history)
         return {"reply": reply}
+
+    def process_pdf(self, chat_id: int, pdf_b64: str, caption: str, lang: str | None = None) -> dict:
+        """PDF nativo. El documento NO se guarda en el historial: reenviar el base64 en cada
+        turno posterior multiplicaria el coste. Solo se apunta una nota de texto."""
+        history = self._history(chat_id)
+        prompt = caption or ("Resume este documento." if lang == "Spanish" else "Summarize this document.")
+        turn = {"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "pdf", "data": pdf_b64},
+        ]}
+        reply = self._generate(history + [turn], lang)
+        if not reply:
+            return {"reply": ""}
+        history.append({"role": "user", "content": f"[PDF] {prompt}"})
+        history.append({"role": "assistant", "content": reply})
+        self._trim(history)
+        return {"reply": reply}
+
+    def run_task(self, instruction: str, text: str) -> str:
+        """Tarea de una sola vez (resumir, traducir) sin perfil ni historial: es mas barata y
+        el perfil del dueno no tiene nada que aportar a traducir un texto."""
+        return self.llm.reply([
+            {"role": "system", "content": instruction},
+            {"role": "user", "content": text},
+        ]).strip()

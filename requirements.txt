@@ -4,3 +4,5 @@ requests>=2.28
 python-dotenv>=1.0
 PyYAML>=6.0
 anthropic==1.13.0  # backend LLM_BACKEND=anthropic (SDK oficial)
+faster-whisper>=1.2  # STT local (usa PyAV: no hace falta ffmpeg aparte)
+pypdf>=5.0  # cuenta paginas del PDF antes de enviarlo a Claude
