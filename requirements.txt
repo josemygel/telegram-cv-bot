@@ -3,3 +3,4 @@ python-telegram-bot>=21.0
 requests>=2.28
 python-dotenv>=1.0
 PyYAML>=6.0
+anthropic==1.13.0  # backend LLM_BACKEND=anthropic (SDK oficial)
