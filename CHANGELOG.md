@@ -2,6 +2,16 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.3] - 2026-10-13
+
+### 🐛 Corregido
+- **Las notas de voz fallaban todas en producción** con `TypeError: open() got an unexpected keyword
+  argument 'metadata_errors'`. faster-whisper 1.2.1 llama a `av.open(..., metadata_errors="ignore")`
+  y PyAV 19 eliminó ese argumento; como `requirements.txt` no fijaba PyAV, la imagen instaló la 19.
+  Se fija `av==17.1.0` (comprobado: la 17 lo acepta, la 19 no) y un test de regresión
+  (`tests/test_pyav_compat.py`) abre un WAV con ese argumento para que el CI lo detecte.
+  La prueba de banco del 13/10 en el VPS no lo vio porque usaba otro paquete (whisper-ctranslate2).
+
 ## [1.3.2] - 2026-10-13
 
 ### 🐛 Corregido
