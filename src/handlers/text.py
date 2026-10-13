@@ -24,12 +24,15 @@ from telegram.constants import ParseMode
 from .. import keyboards
 from ..formatting import markdown_to_telegram_html, split_message
 from ..i18n import resolve_lang
+from ..config import MAX_INPUT_CHARS
 from ..llm import BackendError
+from ..token_ledger import call_context
+from .guard import after_call, refuse_if_blocked
 from .util import mark_seen, typing_action
 
 _LANG_NAME = {"es": "Spanish", "en": "English"}
 
-MAX_MESSAGE_CHARS = 1500  # generous for a real question; blocks copy-pasted walls of text
+MAX_MESSAGE_CHARS = MAX_INPUT_CHARS  # tope duro (2000 por defecto): se rechaza, NUNCA se trunca hacia el LLM
 RATE_LIMIT_SECONDS = 3  # minimum gap between LLM calls per user, on a public bot
 
 # Pure greetings get a fixed, formatted reply (no LLM) so the welcome is consistent
@@ -143,6 +146,8 @@ def make_text_handler(deps):
             await update.message.reply_text(reply)
             await _log(update, chat_id, text, reply)
             return
+        if await refuse_if_blocked(deps, update, lang):
+            return
         if len(text) > MAX_MESSAGE_CHARS:
             await update.message.reply_text(t("message_too_long", lang, max=MAX_MESSAGE_CHARS))
             return
@@ -156,6 +161,7 @@ def make_text_handler(deps):
         busy.add(chat_id)
         last_call[uid] = now
         try:
+            call_context.set((uid, "text"))  # to_thread copia el contexto: el LLM sabe a quien apuntar el gasto
             async with typing_action(context.bot, chat_id):
                 try:
                     out = await asyncio.to_thread(
@@ -167,6 +173,7 @@ def make_text_handler(deps):
                 except Exception:
                     await update.message.reply_text(t("error_generic", lang))
                     return
+            await after_call(deps, context, update.effective_user)
             reply = (out.get("reply") or "").strip()
             if not reply:
                 await update.message.reply_text(t("empty_reply", lang))

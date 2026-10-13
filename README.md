@@ -177,7 +177,15 @@ instead of leaving it blank.
 |---|---|---|---|
 | `TELEGRAM_TOKEN` | **Yes** | *(empty)* | Bot token from BotFather. |
 | `BOT_MODE` | No | `text` | `text` \| `voice` \| `auto` (voice if an NVIDIA GPU is detected, else text). |
-| `LLM_BACKEND` | No | `openai` | `openai` (any OpenAI-compatible API) \| `ollama`. |
+| `LLM_BACKEND` | No | `openai` | `openai` (any OpenAI-compatible API) \| `ollama` \| `anthropic` (Claude, official SDK). |
+| `ANTHROPIC_API_KEY` | If `LLM_BACKEND=anthropic` | *(empty)* | Anthropic API key. Only in the server `.env`, never in the repo. |
+| `ANTHROPIC_MODEL` | No | `claude-haiku-5-5` | Claude model id. Vision is always on with this backend. |
+| `ANTHROPIC_EFFORT` | No | `low` | `output_config.effort` (`low`\|`medium`\|`high`). Thinking is billed as output; low is enough for CV Q&A. |
+| `ANTHROPIC_MAX_TOKENS` | No | `800` | Output cap per reply. |
+| `OWNER_USER_ID` | No | first `ADMIN_USER_IDS` | Exempt from the usage block; only one who can use `/coste`, `/desbloquear` and add the bot to groups. |
+| `TOKEN_LIMIT_HOUR` / `TOKEN_LIMIT_DAY` | No | `200000` / `1000000` | Anthropic-backend abuse rule: above either limit a user is blocked for 24 h and admins are notified. |
+| `MAX_INPUT_CHARS` / `MAX_PHOTO_BYTES` | No | `2000` / `5242880` | Text over the cap is refused; photos over the cap are refused without downloading. |
+| `USAGE_DB_PATH` | No | `data/usage.db` | SQLite with per-user token usage (Anthropic backend). |
 | `OPENAI_BASE_URL` | If `LLM_BACKEND=openai` | `http://localhost:1234/v1` | LM Studio local server, or a hosted endpoint (Groq: `https://api.groq.com/openai/v1`). |
 | `OPENAI_API_KEY` | If using a hosted API | `lm-studio` | LM Studio ignores the value; hosted APIs need a real key. |
 | `OPENAI_MODEL` | If `LLM_BACKEND=openai` | `qwen/qwen3-vl-4b` | Model id/name as your endpoint expects it. |

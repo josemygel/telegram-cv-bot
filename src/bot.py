@@ -21,21 +21,24 @@ from telegram import BotCommand, BotCommandScopeChat
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     MessageHandler,
     filters,
 )
 
 from .config import (
-    ADMIN_USER_IDS, ASSISTANT_NAME, BOT_MODE, HISTORY_DB_PATH, LLM_BACKEND, LLM_MODEL, LLM_VISION,
-    OPENAI_MODEL, PROFILE_PATH, TELEGRAM_TOKEN, TTS_BACKEND, CONTACT_EMAIL, CONTACT_GITHUB,
+    ADMIN_USER_IDS, ANTHROPIC_MODEL, ASSISTANT_NAME, BOT_MODE, HISTORY_DB_PATH, LLM_BACKEND, LLM_MODEL, LLM_VISION,
+    OPENAI_MODEL, OWNER_USER_ID, PROFILE_PATH, TOKEN_LIMIT_DAY, TOKEN_LIMIT_HOUR, USAGE_DB_PATH, TELEGRAM_TOKEN, TTS_BACKEND, CONTACT_EMAIL, CONTACT_GITHUB,
     CONTACT_LINKEDIN, CONTACT_PHONE, CONTACT_TELEGRAM, CONTACT_WHATSAPP,
 )
 from .cv_service import CvService
 from .grounding import build_grounded_prompt
 from .handlers.callbacks import make_callback_handlers
 from .handlers.commands import make_command_handlers
+from .handlers.cost import make_cost_handlers
 from .handlers.errors import make_error_handler
+from .handlers.guard import make_group_guard, make_ignored_media_handler
 from .handlers.history import make_history_handlers
 from .handlers.info import make_info_handler
 from .handlers.photo import make_photo_handler
@@ -48,6 +51,7 @@ from .i18n import I18n
 from .lang_store import InMemoryLangStore
 from .pipeline import Pipeline
 from .projects import ProjectsRepository
+from .token_ledger import TokenLedger, call_context
 from .runtime import get_llm, gpu_available, resolve_mode
 from .version import __version__
 
@@ -62,7 +66,7 @@ _COMMANDS = [
 ]
 # Extra commands appended ONLY to the admin's own chat menu (cosmetic UX scoping via
 # BotCommandScopeChat -- NOT a security boundary; see handlers/history.py docstring).
-_ADMIN_COMMANDS = [("history", "history"), ("info", "info")]
+_ADMIN_COMMANDS = [("history", "history"), ("info", "info"), ("coste", "cost")]
 
 
 def build_dependencies() -> dict:
@@ -72,6 +76,19 @@ def build_dependencies() -> dict:
     cv = CvService()
     lang_store = InMemoryLangStore()
     llm = get_llm(LLM_BACKEND)
+    # Contabilidad de tokens: solo para el backend de pago. El LLM no conoce usuarios;
+    # el handler fija call_context y aqui se apunta el gasto a ese usuario.
+    ledger = None
+    if LLM_BACKEND.lower() == "anthropic":
+        ledger = TokenLedger(USAGE_DB_PATH, owner_id=OWNER_USER_ID,
+                             hour_limit=TOKEN_LIMIT_HOUR, day_limit=TOKEN_LIMIT_DAY)
+
+        def _record(usage) -> None:
+            ctx = call_context.get()
+            if ctx is not None:
+                ledger.record(ctx[0], usage, ANTHROPIC_MODEL, ctx[1])
+
+        llm.on_usage = _record
     system_prompt = build_grounded_prompt(ASSISTANT_NAME, PROFILE_PATH, projects.list_projects())
     pipeline = Pipeline(llm=llm, system_prompt=system_prompt)
 
@@ -97,13 +114,14 @@ def build_dependencies() -> dict:
     # Vision only implemented for the OpenAI-compatible transport (image_url content
     # parts); Ollama's image format differs and isn't implemented -- fall back to the
     # graceful decline in handlers/photo.py rather than sending a request it can't use.
-    vision_enabled = LLM_VISION and LLM_BACKEND.lower() == "openai"
+    # Claude (Haiku 5.5) acepta imagenes de forma nativa: vision siempre activa con anthropic.
+    vision_enabled = (LLM_VISION and LLM_BACKEND.lower() == "openai") or LLM_BACKEND.lower() == "anthropic"
     # Surfaced by the owner-only /info command to verify WHICH build is answering.
     runtime_info = {
         "version": __version__,
         "mode": MODE,
         "llm_backend": LLM_BACKEND,
-        "llm_model": OPENAI_MODEL if LLM_BACKEND.lower() == "openai" else LLM_MODEL,
+        "llm_model": {"openai": OPENAI_MODEL, "anthropic": ANTHROPIC_MODEL}.get(LLM_BACKEND.lower(), LLM_MODEL),
         "started_at": datetime.now(timezone.utc),
     }
     return {
@@ -111,7 +129,8 @@ def build_dependencies() -> dict:
         "name": ASSISTANT_NAME, "pipeline": pipeline, "contact": contact,
         "stt": stt, "tts": tts, "voice_enabled": voice_enabled, "voice_pref": set(),
         "history_store": history_store, "vision_enabled": vision_enabled,
-        "runtime_info": runtime_info,
+        "runtime_info": runtime_info, "ledger": ledger,
+        "owner_id": OWNER_USER_ID, "admin_ids": set(ADMIN_USER_IDS) | ({OWNER_USER_ID} - {0}),
     }
 
 
@@ -140,6 +159,12 @@ def _register_handlers(app: Application, deps: dict) -> None:
     app.add_handler(CallbackQueryHandler(hist["history_callback"], pattern=r"^hist:"))
     # Owner-only build/instance info (version, host, uptime; see handlers/info.py).
     app.add_handler(CommandHandler("info", make_info_handler(deps)))
+    # Owner-only consumo y desbloqueo (ver handlers/cost.py).
+    cost = make_cost_handlers(deps)
+    app.add_handler(CommandHandler(["coste", "cost"], cost["coste"]))
+    app.add_handler(CommandHandler(["desbloquear", "unblock"], cost["unblock"]))
+    # El bot solo permanece en grupos a los que lo anade el dueno.
+    app.add_handler(ChatMemberHandler(make_group_guard(deps), ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(CallbackQueryHandler(cb["cv"], pattern=r"^cv:"))
     app.add_handler(CallbackQueryHandler(cb["contact"], pattern=r"^contact:"))
     app.add_handler(CallbackQueryHandler(cb["projects"], pattern=r"^proj:"))
@@ -150,6 +175,10 @@ def _register_handlers(app: Application, deps: dict) -> None:
     app.add_handler(MessageHandler(filters.VOICE, make_voice_handler(deps)))
     app.add_handler(MessageHandler(filters.PHOTO, make_photo_handler(deps)))
     app.add_handler(MessageHandler(filters.Sticker.ALL, make_sticker_handler(deps)))
+    # Video / notas de video / documentos / animaciones / audio: ignorados sin descargar.
+    app.add_handler(MessageHandler(
+        filters.VIDEO | filters.VIDEO_NOTE | filters.Document.ALL | filters.ANIMATION | filters.AUDIO,
+        make_ignored_media_handler(deps)))
     app.add_error_handler(make_error_handler(deps))
 
 

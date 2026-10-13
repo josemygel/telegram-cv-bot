@@ -71,3 +71,18 @@ claim_success: "✅ Registered as admin (your id: {id}). Saved to .env — you c
 history_disabled: "Conversation logging is disabled (set HISTORY_DB_PATH in .env)."
 history_empty: "No one has messaged you yet."
 history_title: "People who have messaged you (tap one to view the conversation):"
+
+# --- Paid backend: abuse caps and blocking ---
+llm_refusal: "Sorry, I can't help with that request."
+user_blocked: "You've gone over the assistant's usage limit, so I'm pausing it for you for 24 hours. Come back tomorrow and we'll continue. Thanks for your patience!"
+admin_user_blocked: "User blocked for 24 h for excessive token use: {who} (id {uid}). Use /desbloquear {uid} to lift it."
+photo_too_large: "That photo is too large (max {max} MB). Could you send a smaller one?"
+unsupported_media: "For now I only understand text and photos. Type your question and I'll answer."
+cost_today: "Today (UTC)"
+cost_month: "This month (UTC)"
+cost_empty: "No usage recorded."
+cost_disabled: "Usage tracking is only active with LLM_BACKEND=anthropic."
+unblock_usage: "Usage: /desbloquear <user id>"
+unblock_done: "User {uid} unblocked."
+unblock_none: "User {uid} was not blocked."
+cmd_cost: "Token usage and cost"

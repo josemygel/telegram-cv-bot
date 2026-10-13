@@ -13,7 +13,10 @@ import tempfile
 import time
 from pathlib import Path
 
+from ..config import MAX_PHOTO_BYTES
 from ..llm import BackendError
+from ..token_ledger import call_context
+from .guard import after_call, refuse_if_blocked
 from .util import mark_seen, typing_action
 
 _LANG_NAME = {"es": "Spanish", "en": "English"}
@@ -50,6 +53,13 @@ def make_photo_handler(deps):
             await _log(update, chat_id, caption or "[image]", decline)
             return
 
+        if await refuse_if_blocked(deps, update, lang):
+            return
+        # Tope de tamano ANTES de descargar: file_size lo informa Telegram en el update.
+        size = getattr(update.message.photo[-1], "file_size", None)
+        if size is not None and size > MAX_PHOTO_BYTES:
+            await update.message.reply_text(t("photo_too_large", lang, max=MAX_PHOTO_BYTES // (1024 * 1024)))
+            return
         now = time.monotonic()
         if now - last_call.get(uid, 0.0) < RATE_LIMIT_SECONDS:
             await update.message.reply_text(t("rate_limited", lang))
@@ -60,12 +70,18 @@ def make_photo_handler(deps):
         busy.add(chat_id)
         last_call[uid] = now
         try:
+            call_context.set((uid, "photo"))
             async with typing_action(context.bot, chat_id):
                 with tempfile.TemporaryDirectory() as tmp:
                     photo_path = str(Path(tmp) / "photo.jpg")
                     tg_file = await context.bot.get_file(update.message.photo[-1].file_id)
                     await tg_file.download_to_drive(photo_path)
-                    image_b64 = base64.b64encode(Path(photo_path).read_bytes()).decode("ascii")
+                    raw = Path(photo_path).read_bytes()
+                    if len(raw) > MAX_PHOTO_BYTES:  # file_size ausente o falso: se comprueba tambien aqui
+                        await update.message.reply_text(
+                            t("photo_too_large", lang, max=MAX_PHOTO_BYTES // (1024 * 1024)))
+                        return
+                    image_b64 = base64.b64encode(raw).decode("ascii")
                 try:
                     out = await asyncio.to_thread(
                         pipeline.process_image, chat_id, image_b64, caption, _LANG_NAME.get(lang, "Spanish")
@@ -76,6 +92,7 @@ def make_photo_handler(deps):
                 except Exception:
                     await update.message.reply_text(t("error_generic", lang))
                     return
+            await after_call(deps, context, update.effective_user)
             reply = (out.get("reply") or "").strip()
             if not reply:
                 await update.message.reply_text(t("empty_reply", lang))
