@@ -19,3 +19,8 @@ def test_get_llm_factory():
     assert isinstance(get_llm("openai"), OpenAICompatLLM)
     with pytest.raises(ValueError):
         get_llm("nope")
+
+
+def test_get_llm_anthropic():
+    from src.llm_anthropic import AnthropicLLM
+    assert isinstance(get_llm("anthropic"), AnthropicLLM)
