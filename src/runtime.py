@@ -31,4 +31,8 @@ def get_llm(backend: str):
         return OllamaLLM()
     if backend == "openai":
         return OpenAICompatLLM()
-    raise ValueError(f"Unknown LLM_BACKEND: {backend!r} (use 'ollama' or 'openai')")
+    if backend == "anthropic":
+        from .llm_anthropic import AnthropicLLM  # import perezoso: el SDK solo hace falta aqui
+
+        return AnthropicLLM()
+    raise ValueError(f"Unknown LLM_BACKEND: {backend!r} (use 'ollama', 'openai' or 'anthropic')")

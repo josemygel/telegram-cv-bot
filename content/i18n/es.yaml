@@ -71,3 +71,18 @@ claim_success: "✅ Registrado como administrador (tu ID: {id}). Guardado en .en
 history_disabled: "El registro de conversaciones está desactivado (configura HISTORY_DB_PATH en .env)."
 history_empty: "Todavía nadie te ha escrito."
 history_title: "Personas que te han escrito (toca una para ver la conversación):"
+
+# --- Backend de pago: topes y bloqueo anti-abuso ---
+llm_refusal: "Lo siento, no puedo ayudarte con esa petición."
+user_blocked: "Has superado el límite de uso del asistente, así que lo pauso para ti durante 24 horas. Vuelve mañana y seguimos. ¡Gracias por la paciencia!"
+admin_user_blocked: "Usuario bloqueado 24 h por consumo excesivo de tokens: {who} (id {uid}). Usa /desbloquear {uid} para levantarlo."
+photo_too_large: "Esa foto pesa demasiado (máx. {max} MB). ¿Puedes enviar una más ligera?"
+unsupported_media: "De momento solo entiendo texto y fotos. Escríbeme tu pregunta y te respondo."
+cost_today: "Hoy (UTC)"
+cost_month: "Este mes (UTC)"
+cost_empty: "Sin consumo registrado."
+cost_disabled: "El registro de consumo solo está activo con LLM_BACKEND=anthropic."
+unblock_usage: "Uso: /desbloquear <id de usuario>"
+unblock_done: "Usuario {uid} desbloqueado."
+unblock_none: "El usuario {uid} no estaba bloqueado."
+cmd_cost: "Consumo de tokens y coste"
