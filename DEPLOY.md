@@ -95,3 +95,61 @@ on any host that can make outbound HTTPS calls (VPS, Oracle, your laptop). You'd
 webhook (and therefore a domain + TLS + reverse proxy) if you went fully serverless (Cloudflare
 Workers / Vercel / Deno Deploy) — that would require restructuring the bot as a webhook handler,
 which is not necessary for a personal, low-traffic bot like this one.
+
+## Production flow with Plesk (Docker stack + private prod repo)
+
+Production does **not** deploy from this public repo. Plesk Git pulls a **private** repo
+(`telegram-cv-bot-prod`, branch `master`) that holds this template's code plus the private
+`profile/*`, `cv/*.pdf`, its own `.gitignore` and `docker-compose.prod.yaml`. Releases are:
+
+1. Merge the PR into `main` of this public repo.
+2. Sync the code into `telegram-cv-bot-prod` `master`: overlay the new files from `main`, and
+   **keep** `profile/`, `cv/`, `.gitignore` and `docker-compose.prod.yaml` untouched.
+3. Push `master`: Plesk Git auto-pulls the files into the site directory.
+4. In Plesk → Docker → the stack: **Destroy → Deploy** (rebuilds the image from the pulled files).
+5. Check the log for `josembot v<version> starting`, and `/info` as owner.
+
+### One-time host preparation (phase B)
+
+The container runs as uid 10001 with a read-only root filesystem, so the host folders mounted
+for it must be writable by that uid (otherwise `/app/data` and `/app/cv` fail with permission errors):
+
+```
+mkdir -p data cv
+chown -R 10001:10001 data cv
+```
+
+The Whisper model (~1.6 GB for `large-v3-turbo`) is downloaded on first use into the
+`whisper-models` volume and survives redeploys; the first voice note is therefore slow.
+
+### Hardening snippet for `docker-compose.prod.yaml`
+
+Same as `docker-compose.yml` in this repo. Merge these keys into the `bot` service (keep the
+prod `name`, `container_name: josembot-prod`, `build: .`, `env_file`, and **no `ports`**):
+
+```yaml
+    environment:
+      BOT_MODE: voice
+      WHISPER_CPU_THREADS: "6"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cpus: "6"
+    cpu_shares: 256
+    mem_limit: 5g
+    volumes:
+      - ./data:/app/data
+      - ./cv:/app/cv
+      - whisper-models:/models
+volumes:
+  whisper-models:
+```
+
+Notes: `cpu_shares: 256` only matters under contention (default is 1024), so other services on
+the VPS win CPU when both are busy. The `Dockerfile` carries `LABEL com.josembot.image=bot`, so
+orphaned images can be pruned with `docker image prune -f --filter "label=com.josembot.image=bot"`.

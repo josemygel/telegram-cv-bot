@@ -5,9 +5,29 @@ services:
     container_name: josembot
     restart: unless-stopped
     env_file: .env
+    environment:
+      BOT_MODE: voice            # sin esto, 'auto' = texto en un VPS sin GPU y no habria transcripcion
+      WHISPER_CPU_THREADS: "6"
+    user: "10001:10001"
+    # --- Endurecimiento: un bot publico procesa audio/PDF de desconocidos ---
+    read_only: true              # nada puede escribirse en la imagen
+    tmpfs:
+      - /tmp                     # audios/PDF temporales (se borran tras procesarlos)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Whisper en CPU puede comerse la maquina: tope duro y prioridad baja frente a otros servicios.
+    cpus: "6"
+    cpu_shares: 256
+    mem_limit: 5g
+    # (sin `ports`: el bot usa long polling saliente, no escucha en ningun puerto)
     volumes:
-      # Persist /history's SQLite log and any generated CVs across rebuilds/redeploys —
-      # without this, `docker compose up -d --build` recreates the container and wipes
-      # anything written inside it (HISTORY_DB_PATH defaults to data/history.db).
+      # Persist /history's SQLite log, usage ledger and generated CVs across redeploys.
+      # Los directorios del host deben pertenecer al uid 10001 (ver DEPLOY.md).
       - ./data:/app/data
       - ./cv:/app/cv
+      - whisper-models:/models   # cache del modelo de Whisper
+
+volumes:
+  whisper-models:

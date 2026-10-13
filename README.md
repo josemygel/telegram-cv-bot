@@ -194,8 +194,14 @@ instead of leaving it blank.
 | `LLM_VISION` | No | `false` | Send photos to the LLM as vision content. **Only works with `LLM_BACKEND=openai` + a vision-capable model** (e.g. LM Studio's `qwen3-vl-4b`) — most models (Groq's `llama-3.3-70b-versatile` included) are text-only. Ignored under `LLM_BACKEND=ollama` (not implemented). |
 | `OLLAMA_URL` | If `LLM_BACKEND=ollama` | `http://localhost:11434` | Local Ollama daemon URL. |
 | `LLM_MODEL` | If `LLM_BACKEND=ollama` | `llama3.2` | Ollama model tag. |
-| `WHISPER_MODEL` | Voice mode only | `small` | faster-whisper model size (`tiny`…`large-v3`). |
+| `WHISPER_MODEL` | Voice mode only | `large-v3-turbo` | faster-whisper model (`tiny`…`large-v3-turbo`). On a 2-CPU VPS an 11 s clip takes ~39 s with turbo vs ~11 s with `small`. |
 | `WHISPER_DEVICE` | Voice mode only | `cpu` | `cpu` \| `cuda` (needs CUDA cuBLAS/cuDNN DLLs). |
+| `WHISPER_CPU_THREADS` | Voice mode only | `6` | CPU threads used by Whisper. |
+| `MAX_AUDIO_SECONDS_OWNER` / `MAX_AUDIO_SECONDS_USER` | No | `300` / `60` | Max audio length (owner / everyone else), checked before downloading. |
+| `MAX_AUDIO_BYTES` | No | `20971520` | Max audio file size (20 MB). |
+| `MAX_PDF_BYTES` / `MAX_PDF_PAGES` | No | `5242880` / `5` | PDF limits (`LLM_BACKEND=anthropic` only). |
+| `ACTIONS_DB_PATH` / `ACTIONS_TTL_HOURS` | No | `data/actions.db` / `48` | Where the owner's button source text is kept, and for how long. |
+| `INLINE_MAX_CHARS` | No | `500` | Max characters translated per inline query. |
 | `WHISPER_COMPUTE` | Voice mode only | `int8` | Compute type; **use `float16` on Blackwell/RTX 50-series GPUs** (`int8` isn't supported there). |
 | `TTS_BACKEND` | Voice mode only | `edge` | `edge` (edge-tts, online, neural) \| `piper` (offline). |
 | `TTS_VOICE_ES` / `TTS_VOICE_EN` | Voice mode only | `es-ES-ElviraNeural` / `en-US-AriaNeural` | edge-tts voice names. |
@@ -362,3 +368,16 @@ for the authorship statement.
 license): you may **view, download and modify** it for your **own personal, non-commercial** use.
 **Redistribution and commercial use are NOT allowed** without the author's written permission.
 See [LICENSE](LICENSE). Third-party dependencies keep their own licenses.
+
+## Audio, PDF and inline mode (v1.3)
+
+- **Voice notes** (everyone, up to 60 s) and **audio files** (owner only, up to 5 min) are transcribed
+  locally with faster-whisper. The bot replies with a single status bubble that it edits in place
+  (`🎙️ Transcribiendo… 0:12 / 0:45` → `💭 Pensando…` → answer). Other users get the transcript plus
+  Claude's answer; the owner gets only the transcript with `💬 Responder` · `📝 Resumir` · `🌐 Traducir`
+  buttons (so forwarding audio costs no tokens until a button is pressed).
+- **PDFs** (everyone, ≤ 5 MB and ≤ 5 pages) go natively to Claude (`LLM_BACKEND=anthropic`).
+- **Inline mode** (owner only): type `@yourbot some text ` in any chat to get six translations.
+  Enable it once in @BotFather: `/setinline` → pick the bot → set a placeholder text.
+- Downloaded audio/PDF files live in a temp dir and are deleted right after processing; only the
+  duration of third-party audio is kept in `/history`.
