@@ -111,12 +111,12 @@ Production does **not** deploy from this public repo. Plesk Git pulls a **privat
 
 ### One-time host preparation (phase B)
 
-The container runs as uid 10001 with a read-only root filesystem, so the host folders mounted
+The container runs as uid 61001 with a read-only root filesystem, so the host folders mounted
 for it must be writable by that uid (otherwise `/app/data` and `/app/cv` fail with permission errors):
 
 ```
 mkdir -p data cv
-chown -R 10001:10001 data cv
+chown -R 61001:61001 data cv
 ```
 
 The Whisper model (~1.6 GB for `large-v3-turbo`) is downloaded on first use into the
@@ -132,7 +132,7 @@ prod `name`, `container_name: josembot-prod`, `build: .`, `env_file`, and **no `
     environment:
       BOT_MODE: voice
       WHISPER_CPU_THREADS: "6"
-    user: "10001:10001"
+    user: "61001:61001"
     read_only: true
     tmpfs:
       - /tmp

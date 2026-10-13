@@ -9,7 +9,7 @@ services:
     environment:
       BOT_MODE: voice            # sin esto, 'auto' = texto en un VPS sin GPU y no habria transcripcion
       WHISPER_CPU_THREADS: "6"
-    user: "10001:10001"
+    user: "61001:61001"
     # --- Endurecimiento: un bot publico procesa audio/PDF de desconocidos ---
     read_only: true              # nada puede escribirse en la imagen
     tmpfs:
@@ -25,7 +25,7 @@ services:
     # (sin `ports`: el bot usa long polling saliente, no escucha en ningun puerto)
     volumes:
       # Persist /history's SQLite log, usage ledger and generated CVs across redeploys.
-      # Los directorios del host deben pertenecer al uid 10001 (ver DEPLOY.md).
+      # Los directorios del host deben pertenecer al uid 61001 (ver DEPLOY.md).
       - ./data:/app/data
       - ./cv:/app/cv
       - whisper-models:/models   # cache del modelo de Whisper
