@@ -51,6 +51,10 @@ def _convert_parts(content) -> str | list[dict]:
             if parsed:
                 media, data = parsed
                 blocks.append({"type": "image", "source": {"type": "base64", "media_type": media, "data": data}})
+        elif part.get("type") == "pdf" and part.get("data"):
+            # PDF nativo: Claude lee texto y paginas sin que el bot lo procese antes.
+            blocks.append({"type": "document",
+                           "source": {"type": "base64", "media_type": "application/pdf", "data": part["data"]}})
     return blocks
 
 

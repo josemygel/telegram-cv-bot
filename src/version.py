@@ -7,4 +7,4 @@ stale container or a stray duplicate instance polling the same token).
 Part of the josembot project, original work by Jose Miguel Gómez Lozano
 (github.com/josemygel/telegram-cv-bot) — see AUTHORS.md and LICENSE.
 """
-__version__ = "1.2.0"
+__version__ = "1.3.0"

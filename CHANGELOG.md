@@ -2,6 +2,51 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.3.0] - 2026-10-13
+
+### ✨ Añadido
+- **Transcripción local con faster-whisper `large-v3-turbo`** (int8, 6 hilos, `vad_filter`) y un
+  `initial_prompt` con el vocabulario técnico del perfil (`profile/projects.yaml`; lista por
+  defecto si no existe) para que acierte siglas y nombres propios. El modelo se carga una vez y
+  la transcripción corre en un hilo detrás de una **cola de un solo trabajador**: quien espera ve
+  `⏳ En cola (N.º)…` y el bot sigue respondiendo. Elegimos turbo por calidad aun sabiendo que en
+  el VPS (2 CPUs) un clip de 11 s tarda ~39 s frente a ~11 s con `small`: el dueño lo acepta.
+- **Burbuja de estado única**: se responde al audio y ese mensaje se edita (`🎙️ Transcribiendo…
+  m:ss / m:ss` con ediciones de ≥ 2 s para no chocar con los límites de Telegram → `💭 Pensando…`
+  → resultado). Cualquier fallo la deja en un mensaje de error corto, nunca en silencio. Las
+  transcripciones largas se parten por texto (cada trozo con su propio `<pre>`), porque partir
+  HTML ya renderizado rompería las etiquetas.
+- **Topes antes de descargar** con lo que informa Telegram: audio ≤ 60 s (≤ 5 min el dueño) y
+  ≤ 20 MB. El dueño puede enviar o reenviar archivos de audio; el resto, solo notas de voz.
+- **Botones del dueño** `💬 Responder` · `📝 Resumir` · `🌐 Traducir` bajo cada transcripción (sin
+  llamada al LLM hasta que pulsa uno, así reenviar audios no gasta tokens). Se verifica
+  `from_user.id` en cada callback y el texto fuente vive en SQLite 48 h (`callback_data` admite
+  64 bytes). Traducir a Español, Català (también valenciano), English UK/US, Deutsch y Français.
+  Cada llamada se apunta en el ledger con su etiqueta (`answer`/`summary`/`translate`/`pdf`/`inline`).
+- **PDF** para todos (≤ 5 MB y ≤ 5 páginas con pypdf), enviado nativo a Claude como bloque
+  `document`. No se guarda en el historial: reenviar el base64 en cada turno multiplicaría el coste.
+- **Modo inline solo del dueño** (`@bot texto `): seis traducciones, con antirrebote (solo si acaba
+  en espacio o ≥ 3 palabras), caché de 10 min y tope de 500 caracteres. Activar con
+  `/setinline` en @BotFather.
+- **Endurecimiento Docker**: usuario sin privilegios, raíz de solo lectura con `tmpfs` en `/tmp`,
+  `cap_drop: ALL`, `no-new-privileges`, `cpus: 6`, `cpu_shares: 256`, `mem_limit: 5g`, sin puertos,
+  volúmenes para `data/`, `cv/` y la caché del modelo, y `LABEL com.josembot.image=bot`.
+  No hace falta ffmpeg: faster-whisper decodifica con PyAV.
+- DEPLOY.md documenta el flujo real de producción (repo público → repo privado → Plesk).
+
+### 🔒 Seguridad
+- Del contenido de audios de terceros solo se guarda en `/history` la duración; los ficheros
+  descargados se borran justo después de procesarse.
+
+### 💥 Cambios incompatibles
+- Se retira el flujo «voz entra → voz sale» (`handlers/voice.py`): las notas de voz ahora devuelven
+  la transcripción (TTS queda fuera de esta fase). `WHISPER_MODEL` pasa de `base` a `large-v3-turbo`
+  y `WHISPER_DEVICE` de `auto` a `cpu`. `faster-whisper` y `pypdf` entran en `requirements.txt`.
+
+### Pendiente
+- `🌐 Traducir` bajo las respuestas automáticas a mensajes de texto del dueño: se omite (traduciría
+  la respuesta del bot, no un texto suyo, y complica el flujo).
+
 ## [1.2.0] - 2026-10-13
 
 ### ✨ Añadido
